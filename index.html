@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Digitale Lernkarteikarten mit Synchronisation über GitHub">
+  <meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <title>Lernkartei</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%82%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 class="brand"><span class="brand-icon" aria-hidden="true">🗂️</span><span class="brand-text">Lernkartei</span></h1>
+
+      <nav class="tabs" role="tablist" aria-label="Ansicht wählen">
+        <button class="tab is-active" id="tab-practice" type="button" role="tab" aria-selected="true" aria-controls="view-practice" data-tab="practice">Üben</button>
+        <button class="tab" id="tab-create" type="button" role="tab" aria-selected="false" aria-controls="view-create" data-tab="create">Erstellen</button>
+      </nav>
+
+      <button class="icon-btn" id="open-settings" type="button" aria-label="GitHub-Einstellungen" title="GitHub-Einstellungen">⚙︎</button>
+    </div>
+    <p class="sync-status" id="sync-status" aria-live="polite"></p>
+  </header>
+
+  <main class="container">
+    <!-- ============ Üben ============ -->
+    <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
+      <div class="toolbar">
+        <label class="visually-hidden" for="practice-filter">Fach filtern</label>
+        <select class="select" id="practice-filter"></select>
+        <div class="toolbar-actions">
+          <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
+          <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
+        </div>
+      </div>
+
+      <div class="practice-area" id="practice-area">
+        <p class="progress" id="practice-progress" aria-live="polite"></p>
+
+        <div class="card-scene" id="card-scene">
+          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Karte umdrehen">
+            <div class="flashcard-inner">
+              <div class="flashcard-face flashcard-front" id="card-front">
+                <span class="badge" id="card-fach-front"></span>
+                <span class="face-label">Frage</span>
+                <p class="face-text" id="card-question"></p>
+                <span class="face-hint">Tippen zum Umdrehen</span>
+              </div>
+              <div class="flashcard-face flashcard-back" id="card-back" aria-hidden="true">
+                <span class="badge badge-on-accent" id="card-fach-back"></span>
+                <span class="face-label">Antwort</span>
+                <p class="face-text" id="card-answer"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rate-buttons">
+          <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
+          <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
+        </div>
+        <p class="keyboard-hint">Leertaste: umdrehen · 1: Nochmal · 2: Gewusst</p>
+      </div>
+
+      <div class="empty-state" id="practice-empty" hidden>
+        <span class="empty-icon" id="practice-empty-icon" aria-hidden="true"></span>
+        <p class="empty-title" id="practice-empty-title"></p>
+        <p class="empty-text" id="practice-empty-text"></p>
+        <button class="btn btn-primary" id="practice-empty-action" type="button" hidden></button>
+      </div>
+    </section>
+
+    <!-- ============ Erstellen ============ -->
+    <section class="view" id="view-create" role="tabpanel" aria-labelledby="tab-create" hidden>
+      <form class="panel card-form" id="card-form" autocomplete="off">
+        <h2 class="panel-title" id="form-title">Neue Karte</h2>
+
+        <label class="field">
+          <span class="field-label">Fach</span>
+          <input class="input" id="input-fach" name="fach" type="text" list="fach-list" required maxlength="80" placeholder="z. B. VWL, Rechnungswesen" enterkeyhint="next">
+        </label>
+        <datalist id="fach-list"></datalist>
+
+        <label class="field">
+          <span class="field-label">Frage</span>
+          <textarea class="input textarea" id="input-frage" name="frage" rows="3" required placeholder="Was möchtest du abfragen?"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Antwort</span>
+          <textarea class="input textarea" id="input-antwort" name="antwort" rows="4" required placeholder="Die richtige Antwort"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" id="submit-btn" type="submit">Karte hinzufügen</button>
+          <button class="btn btn-secondary" id="cancel-edit-btn" type="button" hidden>Abbrechen</button>
+        </div>
+      </form>
+
+      <div class="list-header">
+        <h2 class="list-title">Deine Karten <span class="counter" id="card-counter"></span></h2>
+        <label class="visually-hidden" for="list-filter">Kartenliste nach Fach filtern</label>
+        <select class="select" id="list-filter"></select>
+      </div>
+
+      <ul class="card-list" id="card-list"></ul>
+      <p class="empty-text list-empty" id="list-empty" hidden></p>
+    </section>
+  </main>
+
+  <!-- ============ Einstellungen ============ -->
+  <div class="modal-backdrop" id="settings-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-header">
+        <h2 id="settings-title">GitHub-Einstellungen</h2>
+        <button class="icon-btn" id="close-settings" type="button" aria-label="Schließen">✕</button>
+      </div>
+
+      <div class="info-box">
+        <p>Die Karten werden als <code>cards.json</code> in einem GitHub-Repository gespeichert.</p>
+        <ul>
+          <li>Verwende einen <strong>Fine-grained Personal Access Token</strong>, beschränkt auf genau dieses eine Repository, mit der Berechtigung <strong>„Contents: Read and write“</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Token erstellen ↗</a></li>
+          <li>Der Token wird <strong>nur lokal im Browser dieses Geräts</strong> (localStorage) gespeichert und niemals ins Repository committed.</li>
+          <li>Trage die Zugangsdaten <strong>auf jedem Gerät einmalig</strong> ein (Mac und Android). Beide lesen und schreiben denselben Datenbestand im selben Repository.</li>
+        </ul>
+      </div>
+
+      <form class="settings-form" id="settings-form" autocomplete="off">
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">GitHub-Benutzername</span>
+            <input class="input" id="set-user" type="text" required autocapitalize="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="field-label">Repository-Name</span>
+            <input class="input" id="set-repo" type="text" required autocapitalize="off" spellcheck="false">
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Branch</span>
+            <input class="input" id="set-branch" type="text" placeholder="main" autocapitalize="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="field-label">Dateipfad</span>
+            <input class="input" id="set-path" type="text" placeholder="cards.json" autocapitalize="off" spellcheck="false">
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">Personal Access Token</span>
+          <input class="input" id="set-token" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
+        </label>
+
+        <p class="settings-message" id="settings-message" role="status" hidden></p>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" id="settings-save" type="submit">Speichern &amp; verbinden</button>
+          <button class="btn btn-ghost-danger" id="settings-clear" type="button">Zugangsdaten von diesem Gerät entfernen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Toast ============ -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span class="toast-text" id="toast-text"></span>
+    <button class="toast-action" id="toast-action" type="button" hidden></button>
+  </div>
+</body>
+</html>

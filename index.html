@@ -1,175 +1,1542 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Digitale Lernkarteikarten mit Synchronisation über GitHub">
-  <meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
-  <title>Lernkartei</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%82%EF%B8%8F%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css">
-  <script type="module" src="js/app.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Lernkartei</title>
+<style>
+  :root {
+    --bg: #f3f4f8;
+    --surface: #ffffff;
+    --surface-2: #f8f9fc;
+    --text: #15171c;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-2: #6366f1;
+    --accent-text: #ffffff;
+    --border: #e3e5ec;
+    --success: #16a34a;
+    --success-text: #ffffff;
+    --danger: #dc2626;
+    --danger-text: #ffffff;
+    --radius: 18px;
+    --radius-sm: 10px;
+    --shadow: 0 10px 30px rgba(20, 20, 40, 0.08);
+    --shadow-sm: 0 2px 8px rgba(20, 20, 40, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface: #1a1d24;
+      --surface-2: #20242c;
+      --text: #f2f3f5;
+      --muted: #9aa0ab;
+      --accent: #818cf8;
+      --accent-2: #a5b4fc;
+      --accent-text: #0f1115;
+      --border: #2a2e37;
+      --success: #4ade80;
+      --success-text: #0f1115;
+      --danger: #f87171;
+      --danger-text: #0f1115;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  .hidden { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.15rem;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: var(--surface-2);
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .tab-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: var(--accent-text);
+    box-shadow: var(--shadow-sm);
+  }
+  .icon-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .icon-btn:hover { transform: rotate(25deg); }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  select, input[type=text], input[type=search], input[type=password], input[type=url], textarea {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    width: 100%;
+  }
+  select:focus, input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  select { width: auto; flex: 1; min-width: 150px; }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 10px 18px;
+    font-weight: 600;
+    transition: transform 0.12s ease, filter 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-accent { background: var(--accent); color: var(--accent-text); }
+  .btn-accent:hover { filter: brightness(1.08); }
+  .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-success { background: var(--success); color: var(--success-text); }
+  .btn-danger { background: var(--danger); color: var(--danger-text); }
+  .btn-sm { padding: 6px 12px; font-size: 0.82rem; border-radius: 8px; }
+
+  /* Flashcard */
+  #praxisBereich { text-align: center; }
+  .flashcard {
+    width: 100%;
+    max-width: 480px;
+    height: 280px;
+    margin: 10px auto 24px;
+    perspective: 1400px;
+    cursor: pointer;
+  }
+  .flashcard-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+  .flashcard.flipped .flashcard-inner { transform: rotateY(180deg); }
+  .card-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+  }
+  .card-face .fach-tag {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .card-back {
+    transform: rotateY(180deg);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-text);
+    border: none;
+  }
+  .card-back .fach-tag {
+    color: var(--accent-text);
+    background: rgba(255,255,255,0.22);
+  }
+  .hint { color: var(--muted); font-size: 0.82rem; margin-top: -14px; margin-bottom: 20px; }
+  .rating-buttons { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; }
+  .progress-info { color: var(--muted); font-size: 0.88rem; }
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* Erstellen */
+  #cardForm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+  #cardForm textarea { resize: vertical; min-height: 60px; }
+  #cardForm .row { display: flex; gap: 10px; }
+  .card-list-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .card-list-item .meta { font-size: 0.72rem; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .card-list-item .q { font-weight: 600; margin-bottom: 2px; }
+  .card-list-item .a { color: var(--muted); font-size: 0.9rem; }
+  .card-list-item .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .list-header h2 { font-size: 1rem; margin: 0; color: var(--muted); }
+
+  /* Lernstoff */
+  .chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 12px;
+    margin-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .chip .count { color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .chip.active {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: var(--accent);
+  }
+  .chip.active .count { color: var(--accent-text); opacity: 0.8; }
+  .search-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .search-row input { flex: 1; }
+  .ls-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  .ls-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .ls-entry summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ls-entry summary::-webkit-details-marker { display: none; }
+  .ls-entry summary::after {
+    content: "›";
+    margin-left: auto;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: var(--muted);
+    transition: transform 0.2s ease;
+  }
+  .ls-entry[open] summary::after { transform: rotate(90deg); }
+  .ls-head { min-width: 0; }
+  .ls-title { font-weight: 700; }
+  .ls-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+  .tag {
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .ls-body { padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .ls-body h4 {
+    margin: 16px 0 6px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+  .ls-text p { margin: 0 0 10px; }
+  .ls-text ul { margin: 0 0 10px; padding-left: 20px; }
+  .ls-text li { margin-bottom: 4px; }
+  .ls-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .ls-images img {
+    width: 100%;
+    height: 150px;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    cursor: zoom-in;
+  }
+  .ls-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .thumb { position: relative; width: 84px; height: 84px; }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .thumb button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--danger);
+    color: var(--danger-text);
+    font-size: 1rem;
+    line-height: 1;
+    box-shadow: var(--shadow-sm);
+  }
+  .settings-panel.wide { max-width: 560px; }
+  .settings-panel textarea { resize: vertical; min-height: 110px; }
+  .lightbox { background: rgba(0, 0, 0, 0.88); cursor: zoom-out; }
+  .lightbox img { max-width: 100%; max-height: 92vh; border-radius: 12px; background: #fff; }
+
+  /* Settings */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 50;
+  }
+  .overlay.hidden { display: none; }
+  .settings-panel {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: var(--shadow);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .settings-panel h2 { margin-top: 0; font-size: 1.1rem; }
+  .settings-panel label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
+  .settings-panel .row2 { display: flex; gap: 10px; }
+  .settings-panel .row2 > div { flex: 1; }
+  .settings-panel small { color: var(--muted); display: block; margin-top: 4px; line-height: 1.4; }
+  .settings-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .status-line { font-size: 0.82rem; margin-top: 10px; min-height: 18px; }
+  .status-ok { color: var(--success); }
+  .status-err { color: var(--danger); }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s ease;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 480px) {
+    .flashcard { height: 240px; }
+    header { padding: 12px 12px; gap: 8px; }
+    header h1 .title-text { display: none; }
+    .tab-btn { padding: 8px 12px; }
+    main { padding: 18px 14px 80px; }
+  }
+</style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <h1 class="brand"><span class="brand-icon" aria-hidden="true">🗂️</span><span class="brand-text">Lernkartei</span></h1>
 
-      <nav class="tabs" role="tablist" aria-label="Ansicht wählen">
-        <button class="tab is-active" id="tab-practice" type="button" role="tab" aria-selected="true" aria-controls="view-practice" data-tab="practice">Üben</button>
-        <button class="tab" id="tab-create" type="button" role="tab" aria-selected="false" aria-controls="view-create" data-tab="create">Erstellen</button>
-      </nav>
+<header>
+  <h1>📇<span class="title-text"> Lernkartei</span></h1>
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="ueben">Üben</button>
+    <button class="tab-btn" data-tab="erstellen">Erstellen</button>
+    <button class="tab-btn" data-tab="lernstoff">Lernstoff</button>
+  </nav>
+  <button class="icon-btn" id="settingsBtn" title="GitHub-Einstellungen">⚙️</button>
+</header>
 
-      <button class="icon-btn" id="open-settings" type="button" aria-label="GitHub-Einstellungen" title="GitHub-Einstellungen">⚙︎</button>
+<main>
+
+  <section id="view-ueben" class="view active">
+    <div class="controls">
+      <select id="fachFilterUeben">
+        <option value="alle">Alle Fächer</option>
+      </select>
+      <button class="btn-ghost btn-sm" id="shuffleBtn">🔀 Mischen</button>
+      <button class="btn-ghost btn-sm" id="reloadBtn">⟳ Sync</button>
     </div>
-    <p class="sync-status" id="sync-status" aria-live="polite"></p>
-  </header>
 
-  <main class="container">
-    <!-- ============ Üben ============ -->
-    <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
-      <div class="toolbar">
-        <label class="visually-hidden" for="practice-filter">Fach filtern</label>
-        <select class="select" id="practice-filter"></select>
-        <div class="toolbar-actions">
-          <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
-          <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
-        </div>
-      </div>
+    <div id="praxisBereich">
+      <div class="empty-state" id="uebenEmptyState">Noch keine Karten vorhanden. Wechsle zu "Erstellen", um die erste Karte anzulegen.</div>
 
-      <div class="practice-area" id="practice-area">
-        <p class="progress" id="practice-progress" aria-live="polite"></p>
-
-        <div class="card-scene" id="card-scene">
-          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Karte umdrehen">
-            <div class="flashcard-inner">
-              <div class="flashcard-face flashcard-front" id="card-front">
-                <span class="badge" id="card-fach-front"></span>
-                <span class="face-label">Frage</span>
-                <p class="face-text" id="card-question"></p>
-                <span class="face-hint">Tippen zum Umdrehen</span>
-              </div>
-              <div class="flashcard-face flashcard-back" id="card-back" aria-hidden="true">
-                <span class="badge badge-on-accent" id="card-fach-back"></span>
-                <span class="face-label">Antwort</span>
-                <p class="face-text" id="card-answer"></p>
-              </div>
-            </div>
+      <div class="flashcard hidden" id="flashcard">
+        <div class="flashcard-inner">
+          <div class="card-face card-front" id="cardFront">
+            <span class="fach-tag" id="frontFach"></span>
+            <div id="frontText"></div>
+          </div>
+          <div class="card-face card-back" id="cardBack">
+            <span class="fach-tag" id="backFach"></span>
+            <div id="backText"></div>
           </div>
         </div>
-
-        <div class="rate-buttons">
-          <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
-          <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
-        </div>
-        <p class="keyboard-hint">Leertaste: umdrehen · 1: Nochmal · 2: Gewusst</p>
       </div>
+      <p class="hint hidden" id="flipHint">Tippen oder klicken zum Umdrehen</p>
 
-      <div class="empty-state" id="practice-empty" hidden>
-        <span class="empty-icon" id="practice-empty-icon" aria-hidden="true"></span>
-        <p class="empty-title" id="practice-empty-title"></p>
-        <p class="empty-text" id="practice-empty-text"></p>
-        <button class="btn btn-primary" id="practice-empty-action" type="button" hidden></button>
+      <div class="rating-buttons hidden" id="ratingButtons">
+        <button class="btn-ghost" id="btnNochmal">🔁 Nochmal</button>
+        <button class="btn-success" id="btnGewusst">✓ Gewusst</button>
       </div>
-    </section>
-
-    <!-- ============ Erstellen ============ -->
-    <section class="view" id="view-create" role="tabpanel" aria-labelledby="tab-create" hidden>
-      <form class="panel card-form" id="card-form" autocomplete="off">
-        <h2 class="panel-title" id="form-title">Neue Karte</h2>
-
-        <label class="field">
-          <span class="field-label">Fach</span>
-          <input class="input" id="input-fach" name="fach" type="text" list="fach-list" required maxlength="80" placeholder="z. B. VWL, Rechnungswesen" enterkeyhint="next">
-        </label>
-        <datalist id="fach-list"></datalist>
-
-        <label class="field">
-          <span class="field-label">Frage</span>
-          <textarea class="input textarea" id="input-frage" name="frage" rows="3" required placeholder="Was möchtest du abfragen?"></textarea>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Antwort</span>
-          <textarea class="input textarea" id="input-antwort" name="antwort" rows="4" required placeholder="Die richtige Antwort"></textarea>
-        </label>
-
-        <div class="form-actions">
-          <button class="btn btn-primary" id="submit-btn" type="submit">Karte hinzufügen</button>
-          <button class="btn btn-secondary" id="cancel-edit-btn" type="button" hidden>Abbrechen</button>
-        </div>
-      </form>
-
-      <div class="list-header">
-        <h2 class="list-title">Deine Karten <span class="counter" id="card-counter"></span></h2>
-        <label class="visually-hidden" for="list-filter">Kartenliste nach Fach filtern</label>
-        <select class="select" id="list-filter"></select>
-      </div>
-
-      <ul class="card-list" id="card-list"></ul>
-      <p class="empty-text list-empty" id="list-empty" hidden></p>
-    </section>
-  </main>
-
-  <!-- ============ Einstellungen ============ -->
-  <div class="modal-backdrop" id="settings-modal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="modal-header">
-        <h2 id="settings-title">GitHub-Einstellungen</h2>
-        <button class="icon-btn" id="close-settings" type="button" aria-label="Schließen">✕</button>
-      </div>
-
-      <div class="info-box">
-        <p>Die Karten werden als <code>cards.json</code> in einem GitHub-Repository gespeichert.</p>
-        <ul>
-          <li>Verwende einen <strong>Fine-grained Personal Access Token</strong>, beschränkt auf genau dieses eine Repository, mit der Berechtigung <strong>„Contents: Read and write“</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Token erstellen ↗</a></li>
-          <li>Der Token wird <strong>nur lokal im Browser dieses Geräts</strong> (localStorage) gespeichert und niemals ins Repository committed.</li>
-          <li>Trage die Zugangsdaten <strong>auf jedem Gerät einmalig</strong> ein (Mac und Android). Beide lesen und schreiben denselben Datenbestand im selben Repository.</li>
-        </ul>
-      </div>
-
-      <form class="settings-form" id="settings-form" autocomplete="off">
-        <div class="field-row">
-          <label class="field">
-            <span class="field-label">GitHub-Benutzername</span>
-            <input class="input" id="set-user" type="text" required autocapitalize="off" spellcheck="false">
-          </label>
-          <label class="field">
-            <span class="field-label">Repository-Name</span>
-            <input class="input" id="set-repo" type="text" required autocapitalize="off" spellcheck="false">
-          </label>
-        </div>
-        <div class="field-row">
-          <label class="field">
-            <span class="field-label">Branch</span>
-            <input class="input" id="set-branch" type="text" placeholder="main" autocapitalize="off" spellcheck="false">
-          </label>
-          <label class="field">
-            <span class="field-label">Dateipfad</span>
-            <input class="input" id="set-path" type="text" placeholder="cards.json" autocapitalize="off" spellcheck="false">
-          </label>
-        </div>
-        <label class="field">
-          <span class="field-label">Personal Access Token</span>
-          <input class="input" id="set-token" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
-        </label>
-
-        <p class="settings-message" id="settings-message" role="status" hidden></p>
-
-        <div class="form-actions">
-          <button class="btn btn-primary" id="settings-save" type="submit">Speichern &amp; verbinden</button>
-          <button class="btn btn-ghost-danger" id="settings-clear" type="button">Zugangsdaten von diesem Gerät entfernen</button>
-        </div>
-      </form>
+      <p class="progress-info" id="progressInfo"></p>
     </div>
-  </div>
+  </section>
 
-  <!-- ============ Toast ============ -->
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
-    <span class="toast-text" id="toast-text"></span>
-    <button class="toast-action" id="toast-action" type="button" hidden></button>
+  <section id="view-erstellen" class="view">
+    <form id="cardForm">
+      <input type="text" id="fachInput" placeholder="Fach, z. B. VWL oder Rechnungswesen" list="fachListe" required>
+      <datalist id="fachListe"></datalist>
+      <textarea id="frageInput" placeholder="Frage" required></textarea>
+      <textarea id="antwortInput" placeholder="Antwort" required></textarea>
+      <div class="row">
+        <button type="submit" class="btn-accent" id="submitBtn" style="flex:1">+ Karte hinzufügen</button>
+        <button type="button" class="btn-ghost hidden" id="cancelEditBtn">Abbrechen</button>
+      </div>
+    </form>
+
+    <div class="list-header">
+      <h2 id="cardCountLabel">0 Karten</h2>
+      <select id="fachFilterListe">
+        <option value="alle">Alle Fächer</option>
+      </select>
+    </div>
+    <div id="cardList"></div>
+  </section>
+
+  <section id="view-lernstoff" class="view">
+    <div class="chips" id="lsChips"></div>
+    <div class="search-row">
+      <input type="search" id="lsSearch" placeholder="Suchen, z. B. BA" autocomplete="off">
+      <button class="btn-accent" id="lsNewBtn">+ Neu</button>
+    </div>
+    <div class="ls-meta-row">
+      <span id="lsCount"></span>
+      <button class="btn-ghost btn-sm" id="lsSyncBtn">⟳ Sync</button>
+    </div>
+    <div id="lsList"></div>
+  </section>
+
+</main>
+
+<div class="overlay hidden" id="settingsOverlay">
+  <div class="settings-panel">
+    <h2>⚙️ GitHub-Verbindung</h2>
+    <small>Deine Karten werden als JSON-Datei in einem GitHub-Repository gespeichert. So funktioniert die Synchronisierung zwischen Mac und Android: beide laden und speichern über dasselbe Repository. Der Lernstoff (lernstoff.json) und die Bilder (Ordner images/) liegen im selben Repository neben der Kartendatei.</small>
+
+    <label for="ghUser">GitHub-Benutzername</label>
+    <input type="text" id="ghUser" placeholder="z. B. Salty88">
+
+    <label for="ghRepo">Repository-Name</label>
+    <input type="text" id="ghRepo" placeholder="z. B. Lernkartei-Daten">
+
+    <div class="row2">
+      <div>
+        <label for="ghBranch">Branch</label>
+        <input type="text" id="ghBranch" placeholder="main" value="main">
+      </div>
+      <div>
+        <label for="ghPath">Dateipfad</label>
+        <input type="text" id="ghPath" placeholder="cards.json" value="cards.json">
+      </div>
+    </div>
+
+    <label for="ghToken">Personal Access Token</label>
+    <input type="password" id="ghToken" placeholder="github_pat_...">
+    <small>Fine-grained Token, nur für dieses eine Repository, mit Berechtigung "Contents: Read and write". Wird nur lokal in diesem Browser gespeichert, nie im Repository selbst. Muss auf jedem Gerät (Mac, Android) einmal eingegeben werden.</small>
+
+    <div class="settings-actions">
+      <button class="btn-accent" id="saveSettingsBtn" style="flex:1">Speichern & verbinden</button>
+      <button class="btn-ghost" id="closeSettingsBtn">Schließen</button>
+    </div>
+    <p class="status-line" id="settingsStatus"></p>
   </div>
+</div>
+
+<div class="overlay hidden" id="lsEditorOverlay">
+  <div class="settings-panel wide">
+    <h2 id="lsEditorTitle">Neuer Lernstoff</h2>
+
+    <label for="lsFach">Fach</label>
+    <input type="text" id="lsFach" placeholder="z. B. Rechnungswesen, VWL, MPA" list="fachListeLs" autocomplete="off">
+    <datalist id="fachListeLs"></datalist>
+
+    <label for="lsTitel">Titel</label>
+    <input type="text" id="lsTitel" placeholder="z. B. Beschäftigungsabweichung (BA)" autocomplete="off">
+
+    <label for="lsStichworte">Kürzel und Stichworte (mit Komma trennen)</label>
+    <input type="text" id="lsStichworte" placeholder="z. B. BA, Beschäftigungsabweichung, Kostenstelle" autocomplete="off">
+
+    <label for="lsErklaerung">Erklärung</label>
+    <textarea id="lsErklaerung" placeholder="Worum geht es? Definition, Formel, Merksatz."></textarea>
+    <small>Leerzeile = neuer Absatz. Zeilen mit "- " am Anfang werden zur Aufzählung. **Text** wird fett.</small>
+
+    <label for="lsVerstaendnis">Verständnis aufbauen (Beispiel, Schritt für Schritt)</label>
+    <textarea id="lsVerstaendnis" placeholder="Rechenbeispiel, Herleitung, Eselsbrücke, typische Fehler."></textarea>
+
+    <label>Bilder und Visualisierungen</label>
+    <input type="file" id="lsFileInput" accept="image/*" multiple hidden>
+    <button type="button" class="btn-ghost" id="lsAddImageBtn">📷 Bilder hinzufügen</button>
+    <div class="thumbs" id="lsThumbs"></div>
+    <small>Bilder werden vor dem Hochladen automatisch verkleinert und im Ordner images/ deines Repositories gespeichert.</small>
+
+    <div class="settings-actions">
+      <button class="btn-accent" id="lsSaveBtn" style="flex:1">Speichern</button>
+      <button class="btn-ghost" id="lsCancelBtn">Abbrechen</button>
+    </div>
+    <p class="status-line" id="lsStatus"></p>
+  </div>
+</div>
+
+<div class="overlay lightbox hidden" id="lightbox"><img id="lightboxImg" alt=""></div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- State ----------
+  let cards = [];
+  let currentSha = null;
+  let settings = loadSettings();
+  let practiceQueue = [];
+  let practiceIndex = 0;
+  let editingCardId = null;
+  let saveTimer = null;
+
+  // Lernstoff
+  let lernstoff = [];
+  let activeFach = "alle";
+  let editorEntryId = null;
+  let editorOriginal = null;
+  let editorImages = [];
+  const openLernstoff = new Set();
+  const imageUrlCache = new Map();
+
+  const el = (id) => document.getElementById(id);
+
+  // ---------- Utilities ----------
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function b64EncodeUnicode(str) {
+    const bytes = new TextEncoder().encode(str);
+    let binary = "";
+    bytes.forEach((b) => (binary += String.fromCharCode(b)));
+    return btoa(binary);
+  }
+
+  function b64DecodeUnicode(b64) {
+    const binary = atob(b64.replace(/\n/g, ""));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function showToast(msg) {
+    const t = el("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ---------- Settings (lokal pro Gerät) ----------
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem("lernkartei_settings");
+      return raw ? JSON.parse(raw) : { user: "", repo: "", branch: "main", path: "cards.json", token: "" };
+    } catch (e) {
+      return { user: "", repo: "", branch: "main", path: "cards.json", token: "" };
+    }
+  }
+
+  function persistSettings() {
+    localStorage.setItem("lernkartei_settings", JSON.stringify(settings));
+  }
+
+  function apiUrl() {
+    return `https://api.github.com/repos/${encodeURIComponent(settings.user)}/${encodeURIComponent(settings.repo)}/contents/${settings.path}`;
+  }
+
+  function isConfigured() {
+    return settings.user && settings.repo && settings.token && settings.path;
+  }
+
+  // ---------- GitHub Sync ----------
+  async function fetchCards(showMsg) {
+    if (!isConfigured()) {
+      el("settingsOverlay").classList.remove("hidden");
+      setSettingsStatus("Bitte zuerst GitHub-Zugang einrichten.", false);
+      return;
+    }
+    try {
+      const res = await fetch(`${apiUrl()}?ref=${encodeURIComponent(settings.branch)}&_=${Date.now()}`, {
+        headers: {
+          Authorization: `token ${settings.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      if (res.status === 404) {
+        cards = [];
+        currentSha = null;
+        if (showMsg) showToast("Noch keine Datei im Repo – wird beim ersten Speichern angelegt.");
+      } else if (res.ok) {
+        const data = await res.json();
+        currentSha = data.sha;
+        const jsonText = b64DecodeUnicode(data.content);
+        cards = jsonText.trim() ? JSON.parse(jsonText) : [];
+        if (showMsg) showToast("Von GitHub geladen (" + cards.length + " Karten).");
+      } else if (res.status === 401 || res.status === 403) {
+        showToast("GitHub-Zugriff verweigert. Token prüfen.");
+        return;
+      } else {
+        showToast("Fehler beim Laden (" + res.status + ").");
+        return;
+      }
+      renderAll();
+    } catch (e) {
+      showToast("Keine Verbindung zu GitHub.");
+    }
+  }
+
+  async function saveCards(message) {
+    if (!isConfigured()) {
+      el("settingsOverlay").classList.remove("hidden");
+      setSettingsStatus("Bitte zuerst GitHub-Zugang einrichten.", false);
+      return false;
+    }
+    try {
+      const body = {
+        message: message || "Lernkartei aktualisiert",
+        content: b64EncodeUnicode(JSON.stringify(cards, null, 2)),
+        branch: settings.branch,
+      };
+      if (currentSha) body.sha = currentSha;
+
+      const res = await fetch(apiUrl(), {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${settings.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        currentSha = data.content.sha;
+        showToast("Gespeichert auf GitHub.");
+        return true;
+      } else if (res.status === 409) {
+        showToast("Konflikt: neuere Version auf GitHub. Lade neu...");
+        await fetchCards(false);
+        return false;
+      } else {
+        showToast("Fehler beim Speichern (" + res.status + ").");
+        return false;
+      }
+    } catch (e) {
+      showToast("Keine Verbindung zu GitHub. Änderung bleibt lokal ungesichert.");
+      return false;
+    }
+  }
+
+  function scheduleSave(message) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveCards(message), 1200);
+  }
+
+  // ---------- Tabs ----------
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+      btn.classList.add("active");
+      el("view-" + btn.dataset.tab).classList.add("active");
+      if (btn.dataset.tab === "ueben") startPracticeSession();
+    });
+  });
+
+  // ---------- Settings Panel ----------
+  function openSettings() {
+    el("ghUser").value = settings.user || "";
+    el("ghRepo").value = settings.repo || "";
+    el("ghBranch").value = settings.branch || "main";
+    el("ghPath").value = settings.path || "cards.json";
+    el("ghToken").value = settings.token || "";
+    setSettingsStatus("", true);
+    el("settingsOverlay").classList.remove("hidden");
+  }
+  el("settingsBtn").addEventListener("click", openSettings);
+  el("closeSettingsBtn").addEventListener("click", () => el("settingsOverlay").classList.add("hidden"));
+
+  function setSettingsStatus(msg, ok) {
+    const line = el("settingsStatus");
+    line.textContent = msg;
+    line.className = "status-line " + (ok ? "status-ok" : "status-err");
+  }
+
+  el("saveSettingsBtn").addEventListener("click", async () => {
+    settings = {
+      user: el("ghUser").value.trim(),
+      repo: el("ghRepo").value.trim(),
+      branch: el("ghBranch").value.trim() || "main",
+      path: el("ghPath").value.trim() || "cards.json",
+      token: el("ghToken").value.trim(),
+    };
+    persistSettings();
+    setSettingsStatus("Verbinde...", true);
+    await syncAll(true);
+    setSettingsStatus("Verbunden mit " + settings.user + "/" + settings.repo, true);
+    setTimeout(() => el("settingsOverlay").classList.add("hidden"), 700);
+  });
+
+  el("reloadBtn").addEventListener("click", () => syncAll(true));
+
+  // ---------- Fach-Listen (Dropdowns & Datalist) ----------
+  function getFaecher() {
+    return [...new Set(cards.map((c) => c.fach).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
+  }
+
+  function renderFachOptions() {
+    const faecher = getFaecher();
+    const optionsHtml = getAlleFaecher().map((f) => `<option value="${escapeHtml(f)}">`).join("");
+    el("fachListe").innerHTML = optionsHtml;
+    el("fachListeLs").innerHTML = optionsHtml;
+
+    [el("fachFilterUeben"), el("fachFilterListe")].forEach((select) => {
+      const current = select.value || "alle";
+      select.innerHTML =
+        '<option value="alle">Alle Fächer</option>' +
+        faecher.map((f) => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
+      if (faecher.includes(current) || current === "alle") select.value = current;
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  // ---------- Üben ----------
+  const flashcard = el("flashcard");
+
+  function startPracticeSession() {
+    const fach = el("fachFilterUeben").value;
+    const pool = fach === "alle" ? cards : cards.filter((c) => c.fach === fach);
+    practiceQueue = shuffleArray(pool);
+    practiceIndex = 0;
+    flashcard.classList.remove("flipped");
+    renderPracticeCard();
+  }
+
+  el("fachFilterUeben").addEventListener("change", startPracticeSession);
+  el("shuffleBtn").addEventListener("click", startPracticeSession);
+
+  function renderPracticeCard() {
+    const hasCards = practiceQueue.length > 0;
+    el("uebenEmptyState").classList.toggle("hidden", cards.length > 0);
+    flashcard.classList.toggle("hidden", !hasCards || cards.length === 0);
+    el("flipHint").classList.toggle("hidden", !hasCards || cards.length === 0);
+    el("ratingButtons").classList.toggle("hidden", !hasCards || cards.length === 0);
+
+    if (!hasCards) {
+      el("progressInfo").textContent = cards.length > 0 ? "Keine Karten in diesem Fach." : "";
+      return;
+    }
+    if (practiceIndex >= practiceQueue.length) {
+      el("progressInfo").textContent = "Runde abgeschlossen. Nochmal mischen oder Fach wechseln.";
+      flashcard.classList.add("hidden");
+      el("flipHint").classList.add("hidden");
+      el("ratingButtons").classList.add("hidden");
+      return;
+    }
+    const c = practiceQueue[practiceIndex];
+    flashcard.classList.remove("flipped");
+    el("frontFach").textContent = c.fach;
+    el("backFach").textContent = c.fach;
+    el("frontText").textContent = c.frage;
+    el("backText").textContent = c.antwort;
+    el("progressInfo").textContent = `Karte ${practiceIndex + 1} von ${practiceQueue.length}`;
+  }
+
+  flashcard.addEventListener("click", () => flashcard.classList.toggle("flipped"));
+
+  function rateCard(gewusst) {
+    const c = practiceQueue[practiceIndex];
+    if (c) {
+      c.wiederholungen = (c.wiederholungen || 0) + 1;
+      c.status = gewusst ? "gelernt" : "lernen";
+      c.letzteUebung = new Date().toISOString().slice(0, 10);
+      scheduleSave("Lernfortschritt aktualisiert");
+    }
+    practiceIndex++;
+    renderPracticeCard();
+  }
+  el("btnGewusst").addEventListener("click", () => rateCard(true));
+  el("btnNochmal").addEventListener("click", () => rateCard(false));
+
+  // ---------- Erstellen ----------
+  const form = el("cardForm");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fach = el("fachInput").value.trim();
+    const frage = el("frageInput").value.trim();
+    const antwort = el("antwortInput").value.trim();
+    if (!fach || !frage || !antwort) return;
+
+    if (editingCardId) {
+      const c = cards.find((x) => x.id === editingCardId);
+      if (c) { c.fach = fach; c.frage = frage; c.antwort = antwort; }
+      editingCardId = null;
+      el("submitBtn").textContent = "+ Karte hinzufügen";
+      el("cancelEditBtn").classList.add("hidden");
+    } else {
+      cards.push({
+        id: uid(), fach, frage, antwort,
+        status: "neu", wiederholungen: 0, letzteUebung: null,
+      });
+    }
+    form.reset();
+    renderAll();
+    scheduleSave("Karte hinzugefügt/bearbeitet");
+  });
+
+  el("cancelEditBtn").addEventListener("click", () => {
+    editingCardId = null;
+    form.reset();
+    el("submitBtn").textContent = "+ Karte hinzufügen";
+    el("cancelEditBtn").classList.add("hidden");
+  });
+
+  el("fachFilterListe").addEventListener("change", renderCardList);
+
+  function renderCardList() {
+    const fach = el("fachFilterListe").value;
+    const list = fach === "alle" ? cards : cards.filter((c) => c.fach === fach);
+    el("cardCountLabel").textContent = `${cards.length} Karte${cards.length === 1 ? "" : "n"}`;
+
+    const container = el("cardList");
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">Keine Karten in dieser Auswahl.</div>';
+      return;
+    }
+    container.innerHTML = list
+      .slice()
+      .reverse()
+      .map(
+        (c) => `
+      <div class="card-list-item" data-id="${c.id}">
+        <div>
+          <div class="meta">${escapeHtml(c.fach)}</div>
+          <div class="q">${escapeHtml(c.frage)}</div>
+          <div class="a">${escapeHtml(c.antwort)}</div>
+        </div>
+        <div class="actions">
+          <button class="btn-ghost btn-sm" data-action="edit">✎</button>
+          <button class="btn-ghost btn-sm" data-action="delete">🗑</button>
+        </div>
+      </div>`
+      )
+      .join("");
+
+    container.querySelectorAll(".card-list-item").forEach((item) => {
+      const id = item.dataset.id;
+      item.querySelector('[data-action="edit"]').addEventListener("click", () => editCard(id));
+      item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteCard(id));
+    });
+  }
+
+  function editCard(id) {
+    const c = cards.find((x) => x.id === id);
+    if (!c) return;
+    editingCardId = id;
+    el("fachInput").value = c.fach;
+    el("frageInput").value = c.frage;
+    el("antwortInput").value = c.antwort;
+    el("submitBtn").textContent = "Änderungen speichern";
+    el("cancelEditBtn").classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function deleteCard(id) {
+    cards = cards.filter((x) => x.id !== id);
+    renderAll();
+    scheduleSave("Karte gelöscht");
+  }
+
+  // ---------- Lernstoff: GitHub-Zugriff (Texte und Bilder) ----------
+  function ghHeaders(extra) {
+    return Object.assign({
+      Authorization: `token ${settings.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    }, extra || {});
+  }
+
+  // Lernstoff-Datei und Bilder liegen im selben Ordner wie die Kartendatei
+  function repoDir() {
+    const p = settings.path || "cards.json";
+    const i = p.lastIndexOf("/");
+    return i >= 0 ? p.slice(0, i + 1) : "";
+  }
+  function lernstoffPath() { return repoDir() + "lernstoff.json"; }
+  function imageDir() { return repoDir() + "images/"; }
+
+  function contentsUrl(path) {
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    return `https://api.github.com/repos/${encodeURIComponent(settings.user)}/${encodeURIComponent(settings.repo)}/contents/${encoded}`;
+  }
+
+  function httpError(status) {
+    const e = new Error("HTTP " + status);
+    e.status = status;
+    return e;
+  }
+
+  function ghErrorMessage(err) {
+    if (err instanceof SyntaxError) return "Die Datei lernstoff.json ist kein gültiges JSON.";
+    const s = err && err.status;
+    if (s === 401 || s === 403) return "Zugriff verweigert. Token prüfen (Contents: Read and write).";
+    if (s === 404) return "Repository oder Branch nicht gefunden.";
+    if (s === 409 || s === 422) return "Konflikt mit neuerer Version. Bitte erneut speichern.";
+    if (s) return "GitHub-Fehler " + s + ".";
+    return "Keine Verbindung zu GitHub.";
+  }
+
+  async function ghGetFile(path) {
+    const url = `${contentsUrl(path)}?ref=${encodeURIComponent(settings.branch)}&_=${Date.now()}`;
+    const res = await fetch(url, { headers: ghHeaders() });
+    if (res.status === 404) return { sha: null, text: null };
+    if (!res.ok) throw httpError(res.status);
+    const data = await res.json();
+    let text = "";
+    if (data.content) {
+      text = b64DecodeUnicode(data.content);
+    } else if (data.size > 0) {
+      // Dateien über 1 MB liefert die API nur im Raw-Format
+      const raw = await fetch(url, { headers: ghHeaders({ Accept: "application/vnd.github.raw+json" }) });
+      if (!raw.ok) throw httpError(raw.status);
+      text = await raw.text();
+    }
+    return { sha: data.sha, text };
+  }
+
+  async function ghPutFile(path, base64Content, sha, message) {
+    const body = { message: message || "Lernkartei aktualisiert", content: base64Content, branch: settings.branch };
+    if (sha) body.sha = sha;
+    const res = await fetch(contentsUrl(path), {
+      method: "PUT",
+      headers: ghHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw httpError(res.status);
+    const data = await res.json();
+    return data.content.sha;
+  }
+
+  async function ghDeleteFile(path, message) {
+    const res = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(settings.branch)}&_=${Date.now()}`, { headers: ghHeaders() });
+    if (res.status === 404) return;
+    if (!res.ok) throw httpError(res.status);
+    const info = await res.json();
+    const del = await fetch(contentsUrl(path), {
+      method: "DELETE",
+      headers: ghHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ message: message || "Bild entfernt", sha: info.sha, branch: settings.branch }),
+    });
+    if (!del.ok) throw httpError(del.status);
+  }
+
+  // Bilder aus dem Repo laden (funktioniert auch bei privaten Repos, da mit Token)
+  async function getImageUrl(path) {
+    if (imageUrlCache.has(path)) return imageUrlCache.get(path);
+    const res = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(settings.branch)}`, {
+      headers: ghHeaders({ Accept: "application/vnd.github.raw+json" }),
+    });
+    if (!res.ok) throw httpError(res.status);
+    const buf = await res.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buf], { type: "image/jpeg" }));
+    imageUrlCache.set(path, url);
+    return url;
+  }
+
+  function sanitizeEntry(e) {
+    return {
+      id: String(e.id || uid()),
+      fach: String(e.fach || ""),
+      titel: String(e.titel || ""),
+      stichworte: Array.isArray(e.stichworte) ? e.stichworte.map(String) : [],
+      erklaerung: String(e.erklaerung || ""),
+      verstaendnis: String(e.verstaendnis || ""),
+      bilder: Array.isArray(e.bilder) ? e.bilder.map(String) : [],
+      erstellt: e.erstellt || null,
+      geaendert: e.geaendert || null,
+    };
+  }
+
+  async function fetchLernstoff() {
+    if (!isConfigured()) return;
+    try {
+      const f = await ghGetFile(lernstoffPath());
+      lernstoff = f.text && f.text.trim() ? JSON.parse(f.text).map(sanitizeEntry) : [];
+      renderFachOptions();
+      refreshLernstoff();
+    } catch (e) {
+      showToast("Lernstoff nicht geladen. " + ghErrorMessage(e));
+    }
+  }
+
+  async function syncAll(showMsg) {
+    await fetchCards(showMsg);
+    await fetchLernstoff();
+  }
+
+  // Liest die aktuelle Version von GitHub, wendet die Änderung an und schreibt zurück.
+  // Bei Konflikt (anderes Gerät war schneller) wird einmal mit frischem Stand wiederholt.
+  async function commitLernstoff(mutator, message) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const f = await ghGetFile(lernstoffPath());
+      let arr = f.text && f.text.trim() ? JSON.parse(f.text).map(sanitizeEntry) : [];
+      arr = mutator(arr);
+      try {
+        await ghPutFile(lernstoffPath(), b64EncodeUnicode(JSON.stringify(arr, null, 2)), f.sha, message);
+        lernstoff = arr;
+        return;
+      } catch (e) {
+        if ((e.status === 409 || e.status === 422) && attempt === 0) continue;
+        throw e;
+      }
+    }
+  }
+
+  // ---------- Lernstoff: Anzeige und Suche ----------
+  function getAlleFaecher() {
+    const set = new Set([...cards.map((c) => c.fach), ...lernstoff.map((x) => x.fach)].filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }
+
+  function norm(s) {
+    // Umlaute und Ersatzschreibung (ä = a = ae) werden gleich behandelt, gilt für Text und Suchbegriff
+    return String(s || "")
+      .toLowerCase()
+      .replace(/ß/g, "ss")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/ae/g, "a")
+      .replace(/oe/g, "o")
+      .replace(/ue/g, "u");
+  }
+
+  function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // Kurze Suchbegriffe (z. B. "BA") nur am Wortanfang, damit nicht jedes Wort mit "ba" im Inneren zählt
+  function scoreEntry(e, terms) {
+    const titel = norm(e.titel);
+    const stich = e.stichworte.map(norm);
+    const body = norm(e.erklaerung + " " + e.verstaendnis + " " + e.fach);
+    let total = 0;
+    for (const t of terms) {
+      const re = t.length <= 2 ? new RegExp("(^|[^a-z0-9])" + escapeRegExp(t)) : null;
+      const has = (txt) => (re ? re.test(txt) : txt.includes(t));
+      let s = 0;
+      if (stich.some((k) => k === t)) s = 100;
+      else if (titel === t) s = 90;
+      else if (titel.startsWith(t)) s = 50;
+      else if (has(titel)) s = 30;
+      else if (stich.some(has)) s = 20;
+      else if (has(body)) s = 5;
+      if (s === 0) return 0;
+      total += s;
+    }
+    return total;
+  }
+
+  function getVisibleLernstoff() {
+    const q = norm(el("lsSearch").value.trim());
+    const terms = q ? q.split(/\s+/).filter(Boolean) : [];
+    let list = lernstoff.filter((e) => activeFach === "alle" || e.fach === activeFach);
+    if (terms.length) {
+      list = list
+        .map((e) => ({ e, s: scoreEntry(e, terms) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .map((x) => x.e);
+    } else {
+      list = list.slice().sort((a, b) => a.fach.localeCompare(b.fach, "de") || a.titel.localeCompare(b.titel, "de"));
+    }
+    return list;
+  }
+
+  function inlineFormat(s) {
+    return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  }
+
+  // Einfache Formatierung: Absätze, Aufzählungen mit "- ", **fett**
+  function formatText(str) {
+    const lines = escapeHtml(str || "").split(/\r?\n/);
+    let html = "";
+    let inList = false;
+    let para = [];
+    const flushPara = () => { if (para.length) { html += "<p>" + para.join("<br>") + "</p>"; para = []; } };
+    const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+    for (const raw of lines) {
+      const line = raw.trim();
+      const bullet = line.match(/^[-•]\s+(.*)$/);
+      if (!line) { flushPara(); closeList(); }
+      else if (bullet) {
+        flushPara();
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += "<li>" + inlineFormat(bullet[1]) + "</li>";
+      } else { closeList(); para.push(inlineFormat(line)); }
+    }
+    flushPara();
+    closeList();
+    return html;
+  }
+
+  function renderChips() {
+    const faecher = getAlleFaecher();
+    if (activeFach !== "alle" && !faecher.includes(activeFach)) activeFach = "alle";
+    const chip = (value, label, count) =>
+      `<button type="button" class="chip${value === activeFach ? " active" : ""}" data-fach="${escapeHtml(value)}">${escapeHtml(label)}<span class="count">${count}</span></button>`;
+    el("lsChips").innerHTML =
+      chip("alle", "Alle", lernstoff.length) +
+      faecher.map((f) => chip(f, f, lernstoff.filter((x) => x.fach === f).length)).join("");
+  }
+
+  function loadEntryImages(detailsEl) {
+    detailsEl.querySelectorAll("img[data-path]").forEach(async (img) => {
+      if (img.getAttribute("src")) return;
+      try { img.src = await getImageUrl(img.dataset.path); }
+      catch (e) { img.alt = "Bild nicht ladbar"; }
+    });
+  }
+
+  function renderLernstoff() {
+    const list = getVisibleLernstoff();
+    const q = el("lsSearch").value.trim();
+    const n = list.length;
+    const filtered = q || activeFach !== "alle";
+    el("lsCount").textContent = filtered ? `${n} Treffer` : `${n} Eintrag${n === 1 ? "" : "e"}`;
+
+    const container = el("lsList");
+    if (lernstoff.length === 0) {
+      container.innerHTML = '<div class="empty-state">Noch kein Lernstoff vorhanden. Mit "+ Neu" die erste Erklärung anlegen, z. B. Beschäftigungsabweichung (BA).</div>';
+      return;
+    }
+    if (n === 0) {
+      container.innerHTML = '<div class="empty-state">Kein Treffer. Anderes Suchwort oder anderes Fach probieren.</div>';
+      return;
+    }
+    const autoOpen = q && n === 1;
+    container.innerHTML = list.map((e) => {
+      const open = openLernstoff.has(e.id) || autoOpen ? " open" : "";
+      const tags = e.stichworte.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join("");
+      const pics = e.bilder.length ? `<span class="tag">📷 ${e.bilder.length}</span>` : "";
+      const images = e.bilder.map((p) => `<img data-path="${escapeHtml(p)}" alt="Bild zu ${escapeHtml(e.titel)}">`).join("");
+      return `
+      <details class="ls-entry" data-id="${escapeHtml(e.id)}"${open}>
+        <summary>
+          <div class="ls-head">
+            <div class="ls-title">${escapeHtml(e.titel)}</div>
+            <div class="ls-tags"><span class="badge">${escapeHtml(e.fach)}</span>${tags}${pics}</div>
+          </div>
+        </summary>
+        <div class="ls-body">
+          ${e.erklaerung ? `<h4>Erklärung</h4><div class="ls-text">${formatText(e.erklaerung)}</div>` : ""}
+          ${e.verstaendnis ? `<h4>Verständnis aufbauen</h4><div class="ls-text">${formatText(e.verstaendnis)}</div>` : ""}
+          ${images ? `<h4>Bilder</h4><div class="ls-images">${images}</div>` : ""}
+          <div class="ls-actions">
+            <button class="btn-ghost btn-sm" data-action="edit">✎ Bearbeiten</button>
+            <button class="btn-ghost btn-sm" data-action="delete">🗑 Löschen</button>
+          </div>
+        </div>
+      </details>`;
+    }).join("");
+
+    container.querySelectorAll(".ls-entry").forEach((d) => {
+      const id = d.dataset.id;
+      d.addEventListener("toggle", () => {
+        if (d.open) { openLernstoff.add(id); loadEntryImages(d); }
+        else openLernstoff.delete(id);
+      });
+      if (d.open) loadEntryImages(d);
+      d.querySelector('[data-action="edit"]').addEventListener("click", () => openLsEditor(id));
+      d.querySelector('[data-action="delete"]').addEventListener("click", () => deleteLernstoff(id));
+    });
+  }
+
+  function refreshLernstoff() {
+    renderChips();
+    renderLernstoff();
+  }
+
+  el("lsSearch").addEventListener("input", renderLernstoff);
+  el("lsSyncBtn").addEventListener("click", () => syncAll(true));
+  el("lsNewBtn").addEventListener("click", () => openLsEditor(null));
+  el("lsChips").addEventListener("click", (ev) => {
+    const b = ev.target.closest(".chip");
+    if (!b) return;
+    activeFach = b.dataset.fach;
+    el("lsChips").querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c === b));
+    renderLernstoff();
+  });
+
+  // Bild in Großansicht
+  function openLightbox(src) {
+    el("lightboxImg").src = src;
+    el("lightbox").classList.remove("hidden");
+  }
+  el("lsList").addEventListener("click", (ev) => {
+    const img = ev.target.closest("img[data-path]");
+    if (img && img.getAttribute("src")) openLightbox(img.getAttribute("src"));
+  });
+  el("lightbox").addEventListener("click", () => el("lightbox").classList.add("hidden"));
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") el("lightbox").classList.add("hidden");
+  });
+
+  // ---------- Lernstoff: Editor ----------
+  function setLsStatus(msg, ok) {
+    const line = el("lsStatus");
+    line.textContent = msg;
+    line.className = "status-line " + (ok ? "status-ok" : "status-err");
+  }
+
+  function openLsEditor(id) {
+    const existing = id ? lernstoff.find((x) => x.id === id) : null;
+    editorOriginal = existing || null;
+    editorEntryId = existing ? existing.id : uid();
+    el("lsEditorTitle").textContent = existing ? "Lernstoff bearbeiten" : "Neuer Lernstoff";
+    el("lsFach").value = existing ? existing.fach : (activeFach !== "alle" ? activeFach : "");
+    el("lsTitel").value = existing ? existing.titel : "";
+    el("lsStichworte").value = existing ? existing.stichworte.join(", ") : "";
+    el("lsErklaerung").value = existing ? existing.erklaerung : "";
+    el("lsVerstaendnis").value = existing ? existing.verstaendnis : "";
+    editorImages = existing ? existing.bilder.map((p) => ({ path: p, previewUrl: null })) : [];
+    renderEditorImages();
+    setLsStatus("", true);
+    el("lsEditorOverlay").classList.remove("hidden");
+  }
+
+  function closeLsEditor(saved) {
+    if (!saved) {
+      editorImages.forEach((im) => { if (!im.path && im.previewUrl) URL.revokeObjectURL(im.previewUrl); });
+    }
+    editorImages = [];
+    editorOriginal = null;
+    el("lsEditorOverlay").classList.add("hidden");
+  }
+
+  function renderEditorImages() {
+    const box = el("lsThumbs");
+    box.innerHTML = editorImages.map((im, i) =>
+      `<div class="thumb"><img data-i="${i}" alt="Bild ${i + 1}"><button type="button" data-remove="${i}" aria-label="Bild entfernen">×</button></div>`
+    ).join("");
+    editorImages.forEach(async (im, i) => {
+      const img = box.querySelector(`img[data-i="${i}"]`);
+      if (!img) return;
+      try {
+        if (!im.previewUrl && im.path) im.previewUrl = await getImageUrl(im.path);
+        img.src = im.previewUrl;
+      } catch (e) { img.alt = "Bild nicht ladbar"; }
+    });
+    box.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => {
+      const [removed] = editorImages.splice(Number(b.dataset.remove), 1);
+      if (removed && !removed.path && removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      renderEditorImages();
+    }));
+  }
+
+  // Foto auf max. 1600 px Kantenlänge verkleinern und als JPEG komprimieren
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob"))), "image/jpeg", 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Bild nicht lesbar")); };
+      img.src = url;
+    });
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1]);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  el("lsAddImageBtn").addEventListener("click", () => el("lsFileInput").click());
+  el("lsFileInput").addEventListener("change", async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = "";
+    if (!files.length) return;
+    setLsStatus("Bilder werden verkleinert...", true);
+    let failed = 0;
+    for (const f of files) {
+      try {
+        const blob = await compressImage(f);
+        const base64 = await blobToBase64(blob);
+        editorImages.push({ path: null, blob, base64, previewUrl: URL.createObjectURL(blob) });
+      } catch (e) { failed++; }
+    }
+    renderEditorImages();
+    setLsStatus(failed ? failed + " Bild(er) konnten nicht verarbeitet werden." : "", !failed);
+  });
+
+  el("lsCancelBtn").addEventListener("click", () => closeLsEditor(false));
+  el("lsSaveBtn").addEventListener("click", saveLsEntry);
+
+  async function saveLsEntry() {
+    const fach = el("lsFach").value.trim();
+    const titel = el("lsTitel").value.trim();
+    const erklaerung = el("lsErklaerung").value.trim();
+    const verstaendnis = el("lsVerstaendnis").value.trim();
+    const stichworte = el("lsStichworte").value.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+
+    if (!fach || !titel || (!erklaerung && !verstaendnis && editorImages.length === 0)) {
+      setLsStatus("Bitte Fach, Titel und mindestens eine Erklärung oder ein Bild angeben.", false);
+      return;
+    }
+    if (!isConfigured()) {
+      setLsStatus("Bitte zuerst die GitHub-Verbindung einrichten (Zahnrad oben rechts).", false);
+      return;
+    }
+
+    const btn = el("lsSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "Speichere...";
+    setLsStatus("", true);
+    const uploaded = [];
+    try {
+      const paths = [];
+      for (const im of editorImages) {
+        if (im.path) { paths.push(im.path); continue; }
+        const p = `${imageDir()}${editorEntryId}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}.jpg`;
+        await ghPutFile(p, im.base64, null, "Bild hinzugefügt");
+        uploaded.push(p);
+        imageUrlCache.set(p, im.previewUrl);
+        paths.push(p);
+      }
+      const now = new Date().toISOString();
+      const entry = {
+        id: editorEntryId, fach, titel, stichworte, erklaerung, verstaendnis, bilder: paths,
+        erstellt: editorOriginal ? editorOriginal.erstellt : now,
+        geaendert: now,
+      };
+      await commitLernstoff((arr) => {
+        const i = arr.findIndex((x) => x.id === entry.id);
+        if (i >= 0) arr[i] = entry; else arr.push(entry);
+        return arr;
+      }, "Lernstoff: " + titel);
+
+      const removed = editorOriginal ? editorOriginal.bilder.filter((p) => !paths.includes(p)) : [];
+      removed.forEach((p) => ghDeleteFile(p).catch(() => {}));
+
+      openLernstoff.add(entry.id);
+      el("lsSearch").value = "";
+      if (activeFach !== "alle") activeFach = fach;
+      closeLsEditor(true);
+      renderFachOptions();
+      refreshLernstoff();
+      showToast("Lernstoff gespeichert.");
+    } catch (e) {
+      uploaded.forEach((p) => ghDeleteFile(p).catch(() => {}));
+      setLsStatus(ghErrorMessage(e), false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Speichern";
+    }
+  }
+
+  async function deleteLernstoff(id) {
+    const entry = lernstoff.find((x) => x.id === id);
+    if (!entry) return;
+    if (!confirm("„" + entry.titel + "“ wirklich löschen?")) return;
+    try {
+      await commitLernstoff((arr) => arr.filter((x) => x.id !== id), "Lernstoff gelöscht: " + entry.titel);
+      entry.bilder.forEach((p) => ghDeleteFile(p).catch(() => {}));
+      openLernstoff.delete(id);
+      renderFachOptions();
+      refreshLernstoff();
+      showToast("Eintrag gelöscht.");
+    } catch (e) {
+      showToast("Löschen fehlgeschlagen. " + ghErrorMessage(e));
+    }
+  }
+
+  // ---------- Render ----------
+  function renderAll() {
+    renderFachOptions();
+    renderCardList();
+    startPracticeSession();
+    refreshLernstoff();
+  }
+
+  // ---------- Start ----------
+  if (isConfigured()) {
+    syncAll(false);
+  } else {
+    openSettings();
+  }
+})();
+</script>
 </body>
 </html>

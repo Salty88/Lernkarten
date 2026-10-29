@@ -263,6 +263,12 @@ function rebuildMerkerList() {
   list.sort((a, b) => fachOrder(a) - fachOrder(b) || a.id.localeCompare(b.id, 'de', { numeric: true }));
   store.merker = list;
   store.index = buildIndex();
+  announceChange();
+}
+
+/** Teilt anderen Ansichten (Lernkarten, Lücken) mit, dass sich das Wissen geändert hat. */
+function announceChange() {
+  document.dispatchEvent(new CustomEvent('wissen:changed'));
 }
 
 /** Stellt den zuletzt geladenen Stand dieses Geräts wieder her (offline lesbar). */
@@ -354,6 +360,7 @@ export async function commitEigene(settings, mutate, message) {
       store.eigeneSha = sha;
       store.index = buildIndex();
       writeCache(settings);
+      announceChange();
       return;
     } catch (err) {
       if (err instanceof SyncError && err.code === 'conflict' && attempt === 0) continue;
@@ -589,4 +596,134 @@ export function search(query, filter = () => true) {
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((r) => r.doc);
+}
+
+/* ------------------------------------------------------------------ */
+/* Verknüpfung Wissen ↔ Lernkarten                                     */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Jede Lernkarte aus dem Wissen trägt eine „Quelle“, die auf genau eine Stelle zeigt:
+ *   m:<merker>|<block>|b|<Begriff>     Glossar-Begriff
+ *   m:<merker>|<block>|h|<Hallensatz>  Managementsprache
+ *   m:<merker>|<block>|m|              Musterantwort
+ *   m:<merker>|<block>|k|              Kernaussage
+ *   m:<merker>|<block>|z|<Situation>   Zuordnung
+ *   m:<merker>|<block>|f|              Feynman
+ *   a:<merker>|<Kürzel>                Abkürzung
+ *   e:<Eintrags-ID>                    eigener Eintrag
+ * Die Karte zeigt immer den aktuellen Text aus dem Wissen; Korrekturen wirken sofort.
+ */
+
+export const CARD_TYPES = {
+  b: 'Begriff',
+  h: 'Managementsprache',
+  m: 'Musterantwort',
+  k: 'Kernaussage',
+  z: 'Zuordnung',
+  f: 'Feynman',
+  a: 'Abkürzung',
+  e: 'Eigener Eintrag',
+};
+
+const blockQuelle = (merker, block, typ, key = '') => `m:${merker.id}|${block.id}|${typ}|${key}`;
+
+function joinText(...parts) {
+  return parts.map((p) => plainText(p)).filter(Boolean).join('\n\n');
+}
+
+/** Alle Karten, die sich aus dem aktuellen Wissen ableiten lassen. */
+function deriveAll() {
+  const list = [];
+  const add = (quelle, typ, fach, frage, antwort, pfad, ziel) => list.push({ quelle, typ, fach, frage, antwort, pfad, ziel });
+
+  for (const merker of store.merker) {
+    const fach = fachLabel(merker.fach);
+    for (const block of merker.bloecke) {
+      const pfad = `${fach} › ${merker.titel} › ${block.id} ${block.titel}`;
+      const ziel = { merker, block };
+      block.glossar.forEach((g) => {
+        add(blockQuelle(merker, block, 'b', g.begriff), 'b', fach, `Erkläre den Begriff: ${g.begriff}`, joinText(g.kurz, g.funktion), `${pfad} › ${g.begriff}`, ziel);
+      });
+      block.management.uebersetzungen.forEach((u) => {
+        add(blockQuelle(merker, block, 'h', u.halle), 'h', fach, `Formuliere in Managementsprache: „${u.halle}“`, plainText(u.management), pfad, ziel);
+      });
+      const ma = block.management.musterantwort;
+      if (ma && ma.frage) add(blockQuelle(merker, block, 'm'), 'm', fach, ma.frage, plainText(ma.antwort), pfad, ziel);
+      if (block.abschluss.kernaussage) {
+        add(blockQuelle(merker, block, 'k'), 'k', fach, `Was ist die Kernaussage zu „${block.titel}“?`, plainText(block.abschluss.kernaussage), pfad, ziel);
+      }
+      block.pruefung.zuordnung.forEach((z) => {
+        add(blockQuelle(merker, block, 'z', z.frage), 'z', fach, `Ordne zu: ${z.frage}`, plainText(z.antwort), pfad, ziel);
+      });
+      const fy = block.abschluss.feynman;
+      if (fy && fy.muss.length) {
+        const muss = fy.muss.map((m, i) => `${i + 1}. ${plainText(m)}`).join('\n');
+        add(blockQuelle(merker, block, 'f'), 'f', fach, `Feynman: ${fy.aufgabe}`, `Muss enthalten:\n${muss}`, pfad, ziel);
+      }
+    }
+    for (const abk of merker.abkuerzungen) {
+      add(`a:${merker.id}|${abk.kurz}`, 'a', fach, `Wofür steht die Abkürzung ${abk.kurz}?`, abk.lang, `${fach} › ${merker.titel} › ${abk.kurz}`, { merker, abk });
+    }
+  }
+  for (const entry of store.eigene) {
+    const fach = entry.fach || 'Allgemein';
+    const antwort = isDraft(entry) ? '' : joinText(entry.erklaerung || entry.verstaendnis);
+    add(`e:${entry.id}`, 'e', fach, `Erkläre den Begriff: ${entry.titel}`, antwort, `Eigene Einträge › ${entry.titel}`, { entry });
+  }
+  return list;
+}
+
+let derivedCache = { index: null, eigene: null, map: new Map(), list: [] };
+
+function derived() {
+  if (derivedCache.index !== store.index || derivedCache.eigene !== store.eigene) {
+    const list = store.index ? deriveAll() : [];
+    derivedCache = { index: store.index, eigene: store.eigene, list, map: new Map(list.map((d) => [d.quelle, d])) };
+  }
+  return derivedCache;
+}
+
+/** Abgeleitete Karte zu einer Quelle oder null, wenn es die Stelle im Wissen nicht (mehr) gibt. */
+export function wissenCard(quelle) {
+  return (quelle && derived().map.get(quelle)) || null;
+}
+
+/** Alle ableitbaren Karten (für „Lernkarten aus Wissen erzeugen“). */
+export function allWissenCards() {
+  return derived().list;
+}
+
+/** Quelle für einen Suchtreffer bzw. ein Ziel im Wissen. */
+export function quelleFor(type, target) {
+  switch (type) {
+    case 'begriff':
+      return blockQuelle(target.merker, target.block, 'b', target.begriff);
+    case 'kuerzel':
+      return `a:${target.merker.id}|${target.kurz}`;
+    case 'thema':
+      return target.block.abschluss.kernaussage ? blockQuelle(target.merker, target.block, 'k') : null;
+    case 'frage':
+      return blockQuelle(target.merker, target.block, 'm');
+    case 'halle':
+      return blockQuelle(target.merker, target.block, 'h', target.uebersetzung.halle);
+    case 'eigen':
+      return `e:${target.id}`;
+    default:
+      return null;
+  }
+}
+
+/** Titel eines Merkers für Filter und Anzeigen. */
+export function merkerTitle(id) {
+  const merker = store.merker.find((m) => m.id === id);
+  return merker ? merker.titel : null;
+}
+
+/** Thema-Gruppe einer Quelle: Merker-ID, "eigen" oder null. */
+export function quelleGroup(quelle) {
+  if (!quelle) return null;
+  if (quelle.startsWith('e:')) return 'eigen';
+  const m = quelle.match(/^[ma]:([^|]+)\|/);
+  return m ? m[1] : null;
 }

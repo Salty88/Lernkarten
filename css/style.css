@@ -1804,3 +1804,152 @@ code {
   .wissen-actions .btn { flex: 1; }
   .letter-bar { top: 88px; }
 }
+
+/* ==================================================================
+   Lernkarten-Nummern, Verknüpfungen und Reiter „Lücken“
+   ================================================================== */
+
+.card-nr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.list-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.list-more {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.tag-ok {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+.card-link {
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.entry-body .card-link { margin-top: 12px; }
+.card-link-row { margin: 4px 0 0; }
+
+.gap-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gap-input-row .input { flex: 1; }
+
+.gap-panel { margin-bottom: 16px; }
+
+.gap-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.gap-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 800;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.gap-found .gap-icon { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.gap-new .gap-icon { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.gap-generate .gap-icon { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.gap-open .gap-icon { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+
+.gap-match-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.gap-match-title { font-size: 1.15rem; font-weight: 700; }
+.gap-path { margin: 0 0 10px; font-size: 0.82rem; color: var(--accent); }
+
+.gap-cardbox {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.gap-sub {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.gap-ok { color: var(--success); }
+details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
+.gap-suggestions { margin-bottom: 16px; }
+
+.gap-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.gap-card-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gap-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gap-card-frage { font-weight: 600; }
+
+.gap-card-antwort {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.88rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.gap-card-actions { display: flex; flex-shrink: 0; gap: 6px; }
+
+.gap-link-text {
+  margin: -2px 0 10px;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.gap-new-form { margin-top: 10px; }
+
+#practice-theme { flex: 1 1 200px; max-width: 320px; }
+
+@media (max-width: 600px) {
+  .brand { display: none; }
+  .tab { padding: 8px 9px; font-size: 0.85rem; }
+  .tabs { gap: 2px; }
+  #practice-theme { max-width: none; flex-basis: 100%; }
+}
+.gap-open.is-done .gap-icon,
+.gap-generate.is-done .gap-icon { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }

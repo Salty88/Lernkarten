@@ -21,6 +21,7 @@
         <button class="tab is-active" id="tab-practice" type="button" role="tab" aria-selected="true" aria-controls="view-practice" data-tab="practice">Üben</button>
         <button class="tab" id="tab-create" type="button" role="tab" aria-selected="false" aria-controls="view-create" data-tab="create">Erstellen</button>
         <button class="tab" id="tab-wissen" type="button" role="tab" aria-selected="false" aria-controls="view-wissen" data-tab="wissen">Wissen</button>
+        <button class="tab" id="tab-luecken" type="button" role="tab" aria-selected="false" aria-controls="view-luecken" data-tab="luecken">Lücken</button>
       </nav>
 
       <button class="icon-btn" id="open-settings" type="button" aria-label="GitHub-Einstellungen" title="GitHub-Einstellungen">⚙︎</button>
@@ -34,6 +35,8 @@
       <div class="toolbar">
         <label class="visually-hidden" for="practice-filter">Fach filtern</label>
         <select class="select" id="practice-filter"></select>
+        <label class="visually-hidden" for="practice-theme">Thema filtern</label>
+        <select class="select" id="practice-theme" hidden></select>
         <div class="toolbar-actions">
           <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
           <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
@@ -110,6 +113,7 @@
       </div>
 
       <ul class="card-list" id="card-list"></ul>
+      <button class="btn btn-secondary list-more" id="list-more" type="button" hidden></button>
       <p class="empty-text list-empty" id="list-empty" hidden></p>
     </section>
 
@@ -134,6 +138,20 @@
         </div>
       </div>
       <div class="wissen-content" id="w-content"></div>
+    </section>
+    <!-- ============ Lücken ============ -->
+    <section class="view" id="view-luecken" role="tabpanel" aria-labelledby="tab-luecken" hidden>
+      <form class="panel gap-form" id="gap-form" autocomplete="off">
+        <h2 class="panel-title">Lücke klären</h2>
+        <p class="muted">Begriff oder Frage eintragen. Die App prüft, ob es dazu schon Wissen oder eine Lernkarte gibt, und verknüpft beides.</p>
+        <div class="gap-input-row">
+          <label class="visually-hidden" for="gap-input">Begriff oder Frage</label>
+          <input class="input" id="gap-input" type="search" placeholder="z. B. Allokation" autocomplete="off" enterkeyhint="search">
+          <button class="btn btn-primary" id="gap-check" type="submit">Prüfen</button>
+        </div>
+      </form>
+      <div class="gap-result" id="gap-result"></div>
+      <div class="gap-overview" id="gap-overview"></div>
     </section>
   </main>
 

@@ -15,6 +15,13 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
   - **Automatische Verlinkung:** Bekannte Begriffe und Kürzel (z. B. KLR, GuV) sind im Text unterstrichen; Antippen zeigt Kurzerklärung, Funktionsweise und Fundstelle.
   - **Herkunfts-Markierungen** aus den Merkern werden farbig angezeigt: Folie und Gesetz neutral, Ergänzung blau, Nicht belegt und Fiktiv gelb, Korrektur rot.
   - **Import** von Merkern als JSON-Datei.
+- **Lücken:** Begriff oder Frage eintragen und prüfen.
+  - Wissen und Lernkarte vorhanden: Erklärung und Verknüpfung werden als Text angezeigt (z. B. „Lernkarte #0042 ↔ ReWe › … › Aufwand“).
+  - Nur Wissen vorhanden: Lernkarte daraus erstellen und verknüpfen.
+  - Nichts vorhanden: Wissenseintrag und verknüpfte Lernkarte anlegen; ohne Erklärung bleibt es eine offene Lücke.
+  - Fehlende Lernkarten zu vorhandenem Wissen lassen sich mit einem Tipp erzeugen.
+- **Lernkarten-Nummern:** Jede Karte hat eine fortlaufende, eindeutige Nummer (#0001, #0002, …). Legen zwei Geräte offline gleichzeitig Karten an, bekommt beim Zusammenführen die später gespeicherte Karte die nächste freie Nummer.
+- **Verknüpfte Lernkarten** zeigen immer den aktuellen Text aus dem Wissen. Wird eine solche Karte bearbeitet, wird sie zur „eigenen Fassung“ und behält ihren Text.
 - **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert. Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
 - **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.
 - **Hell/Dunkel** wechselt automatisch mit der Systemeinstellung.
@@ -27,6 +34,7 @@ index.html            Markup
 css/style.css         Styling (Light/Dark über CSS-Variablen)
 js/app.js             Tabs, Üben, Karten-Formular und -Liste, Einstellungen
 js/wissen.js          Oberfläche des Nachschlagewerks (Themen, Register, Eigene, Suche, Import)
+js/luecken.js         Reiter „Lücken“: prüfen, Lernkarte erstellen oder verknüpfen, offene Lücken
 js/wissen-data.js     Fächer, Laden und Prüfen der Merker, Begriffsverzeichnis, Verlinkung, Suche
 js/richtext.js        Textdarstellung: Absätze, Aufzählungen, fett, Herkunfts-Markierungen
 js/ui.js              Gemeinsame Bausteine: Elemente, Toasts, Dialoge
@@ -36,7 +44,7 @@ js/github-sync.js     GitHub-API, Base64/UTF-8, Einstellungen, lokaler Zwischens
 ## Aufbau des Daten-Repositorys
 
 ```
-cards.json            Lernkarten
+cards.json            Lernkarten (mit Nummer "nr" und optionaler Verknüpfung "quelle")
 lernstoff.json        Eigene Einträge im Nachschlagewerk
 merker/<id>.json      Ein Merker pro Datei (z. B. merker/rewe-1-externes-rechnungswesen.json)
 images/               Bilder der eigenen Einträge

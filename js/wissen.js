@@ -32,6 +32,8 @@ import {
   createLinker,
   sameNameTerms,
   search,
+  quelleFor,
+  wissenCard,
 } from './wissen-data.js';
 
 const PREFS_KEY = 'lernkartei.wissen.prefs';
@@ -39,6 +41,41 @@ const ALL = 'alle';
 const SEARCH_LIMIT = 40;
 
 let getSettings = () => ({});
+/** Zugriff auf die Lernkarten (von app.js gesetzt). */
+let cards = null;
+
+export function setCardBridge(bridge) {
+  cards = bridge;
+}
+
+/**
+ * Zeigt die Verknüpfung zur Lernkarte: vorhandene Karte(n) mit Nummer
+ * oder einen Button, um eine Karte aus dieser Stelle zu erstellen.
+ */
+function renderCardLink(quelle, rerender) {
+  const box = el('div', 'card-link');
+  box.append(el('span', 'sheet-label', 'Lernkarte'));
+  if (!cards || !quelle) return box;
+  const linked = cards.forQuelle(quelle);
+  if (linked.length) {
+    for (const card of linked) {
+      const row = el('p', 'card-link-row');
+      row.append(el('span', 'card-nr', cards.formatNr(card.nr)), document.createTextNode(` ${cards.view(card).frage}`));
+      box.append(row);
+    }
+  } else if (wissenCard(quelle) && wissenCard(quelle).antwort) {
+    box.append(
+      button('btn btn-small btn-secondary', '＋ Lernkarte erstellen', () => {
+        const card = cards.createFromQuelle(quelle);
+        if (card) showToast(`Lernkarte ${cards.formatNr(card.nr)} erstellt`, 'success');
+        rerender();
+      }),
+    );
+  } else {
+    box.append(el('p', 'muted small', 'Noch keine Erklärung vorhanden, daher keine Lernkarte.'));
+  }
+  return box;
+}
 
 /** Ansichtszustand (Modus und Fach werden pro Gerät gemerkt). */
 const ws = {
@@ -781,7 +818,7 @@ function renderTermSheet(term, body) {
     el('p', 'muted', `Miniblock ${term.block.id}: ${term.block.titel}`),
     button('btn btn-small btn-primary', 'Zum Thema ›', () => openMerker(term.merker.id, term.block.id)),
   );
-  body.append(origin);
+  body.append(origin, renderCardLink(quelleFor('begriff', term), () => openSheet(term, { push: false })));
 
   const others = sameNameTerms(term);
   if (others.length) {
@@ -799,6 +836,7 @@ function renderAbbreviationSheet(abk, body) {
   body.append(el('p', 'sheet-lead', abk.lang));
   const related = store.index.terms.find((t) => norm(t.begriff) === norm(abk.lang) || t.synonyme.some((s) => norm(s) === norm(abk.lang)));
   if (related) body.append(button('btn btn-small btn-primary', `Begriff „${related.begriff}“ öffnen`, () => openSheet(related)));
+  body.append(renderCardLink(quelleFor('kuerzel', abk), () => openSheet(abk, { push: false })));
   body.append(
     button('btn btn-small btn-secondary', `Überall nach „${abk.kurz}“ suchen`, () => {
       closeModal($('term-sheet'));
@@ -831,7 +869,7 @@ function loadImages(container) {
   });
 }
 
-function openEntry(id) {
+export function openEntry(id) {
   ws.mode = 'eigene';
   ws.query = '';
   $('w-search').value = '';
@@ -910,6 +948,7 @@ function renderEntry(entry) {
     });
     body.append(el('h4', 'entry-label', 'Bilder'), images);
   }
+  body.append(renderCardLink(`e:${entry.id}`, renderWissen));
   const actions = el('div', 'list-actions');
   actions.append(
     button('btn btn-small btn-secondary', isDraft(entry) ? '✎ Ausfüllen' : '✎ Bearbeiten', () => openEntryEditor(entry.id)),
@@ -1225,7 +1264,12 @@ async function confirmImport() {
     for (const { raw, merker } of importCandidates) await saveMerker(settings, merker, raw);
     closeModal($('import-modal'));
     const first = importCandidates[0].merker;
-    showToast(`${plural(importCandidates.length, 'Merker', 'Merker')} importiert`, 'success');
+    const missing = cards ? cards.countMissing() : 0;
+    showToast(
+      `${plural(importCandidates.length, 'Merker', 'Merker')} importiert`,
+      'success',
+      missing ? { label: `${missing} Lernkarten erzeugen`, onClick: () => showToast(`${plural(cards.generateMissing(), 'Lernkarte', 'Lernkarten')} erzeugt`, 'success') } : null,
+    );
     ws.fach = first.fach;
     openMerker(first.id);
   } catch (err) {

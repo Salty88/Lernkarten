@@ -20,13 +20,19 @@ import {
   saveCards,
 } from './github-sync.js';
 import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
-import { initWissen, syncWissen, reloadWissenForSettings } from './wissen.js';
+import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
+import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards, merkerTitle, quelleGroup } from './wissen-data.js';
+import { initLuecken, renderLuecken } from './luecken.js';
 
 const SAVE_DELAY_MS = 1200;
 const TAB_KEY = 'lernkartei.tab';
 const ALL_SUBJECTS = '__all__';
 const VALID_STATUS = ['neu', 'lernen', 'gelernt'];
 const STATUS_LABELS = { neu: 'Neu', lernen: 'Lernen', gelernt: 'Gelernt' };
+const LIST_PAGE_SIZE = 100;
+const ALL_THEMES = '__all__';
+const THEME_EIGEN = 'eigen';
+const THEME_NONE = '__ohne__';
 
 /* ------------------------------------------------------------------ */
 /* Zustand                                                             */
@@ -49,6 +55,7 @@ const state = {
   tab: 'practice',
   practice: {
     filter: ALL_SUBJECTS,
+    theme: ALL_THEMES,
     order: [],
     index: 0,
     flipped: false,
@@ -58,6 +65,7 @@ const state = {
   editor: {
     editingId: null,
     filter: ALL_SUBJECTS,
+    limit: LIST_PAGE_SIZE,
   },
 };
 
@@ -77,11 +85,12 @@ const $ = (id) => document.getElementById(id);
 
 const dom = {
   tabs: document.querySelectorAll('.tab'),
-  views: { practice: $('view-practice'), create: $('view-create'), wissen: $('view-wissen') },
+  views: { practice: $('view-practice'), create: $('view-create'), wissen: $('view-wissen'), luecken: $('view-luecken') },
   syncStatus: $('sync-status'),
   openSettings: $('open-settings'),
 
   practiceFilter: $('practice-filter'),
+  practiceTheme: $('practice-theme'),
   shuffleBtn: $('shuffle-btn'),
   syncBtn: $('sync-btn'),
   practiceArea: $('practice-area'),
@@ -114,6 +123,7 @@ const dom = {
   cardCounter: $('card-counter'),
   cardList: $('card-list'),
   listEmpty: $('list-empty'),
+  listMore: $('list-more'),
 
   modal: $('settings-modal'),
   closeSettings: $('close-settings'),
@@ -158,6 +168,9 @@ function normalizeCard(raw) {
     status: VALID_STATUS.includes(card.status) ? card.status : 'neu',
     wiederholungen: Number.isFinite(Number(card.wiederholungen)) ? Number(card.wiederholungen) : 0,
     letzteUebung: card.letzteUebung ? String(card.letzteUebung) : null,
+    nr: Number.isInteger(Number(card.nr)) && Number(card.nr) > 0 ? Number(card.nr) : null,
+    quelle: card.quelle ? String(card.quelle) : null,
+    eigeneFassung: card.eigeneFassung === true,
   };
 }
 
@@ -165,13 +178,71 @@ function findCard(id) {
   return state.cards.find((card) => card.id === id) || null;
 }
 
+/** Anzeigeform der Kartennummer, z. B. #0042. */
+function formatNr(nr) {
+  return nr ? `#${String(nr).padStart(4, '0')}` : '#----';
+}
+
+/**
+ * Text einer Karte: Verknüpfte Karten zeigen den aktuellen Stand aus dem Wissen,
+ * selbst bearbeitete Karten („eigene Fassung“) ihren gespeicherten Text.
+ */
+function cardView(card) {
+  if (card.quelle && !card.eigeneFassung) {
+    const linked = wissenCard(card.quelle);
+    if (linked) return { frage: linked.frage, antwort: linked.antwort, pfad: linked.pfad };
+  }
+  const linked = card.quelle ? wissenCard(card.quelle) : null;
+  return { frage: card.frage, antwort: card.antwort, pfad: linked ? linked.pfad : null };
+}
+
+/** Karten ohne Antwort (offene Lücken) werden beim Üben übersprungen. */
+function isPracticable(card) {
+  return cardView(card).antwort.trim() !== '';
+}
+
+/**
+ * Vergibt fortlaufende Nummern: Karten ohne Nummer und doppelte Nummern
+ * (z. B. zwei Geräte offline) bekommen die nächste freie. Die zuerst
+ * gespeicherte Karte behält ihre Nummer.
+ */
+function ensureNumbers() {
+  const used = new Set();
+  const needs = [];
+  for (const card of state.cards) {
+    if (card.nr && !used.has(card.nr)) used.add(card.nr);
+    else needs.push(card);
+  }
+  if (!needs.length) return;
+  let next = used.size ? Math.max(...used) + 1 : 1;
+  for (const card of needs) card.nr = next++;
+  markChangedMany(needs.map((card) => card.id));
+}
+
+function nextNr() {
+  return state.cards.reduce((max, card) => Math.max(max, card.nr || 0), 0) + 1;
+}
+
+const FACH_ORDER = new Map(FAECHER.map((f, i) => [f.id, i]));
+
+/** Fächer der Karten, zusammengefasst (z. B. „ReWe“ und „Rechnungswesen“ sind dasselbe Fach). */
 function getSubjects() {
-  const subjects = new Set(state.cards.map((card) => card.fach));
-  return [...subjects].sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+  const keys = new Set(state.cards.map((card) => fachKey(card.fach)));
+  return [...keys].sort((a, b) => (FACH_ORDER.get(a) ?? 99) - (FACH_ORDER.get(b) ?? 99) || a.localeCompare(b, 'de'));
 }
 
 function cardsForSubject(subject) {
-  return subject === ALL_SUBJECTS ? state.cards : state.cards.filter((card) => card.fach === subject);
+  return subject === ALL_SUBJECTS ? state.cards : state.cards.filter((card) => fachKey(card.fach) === subject);
+}
+
+function themeOf(card) {
+  return quelleGroup(card.quelle) || THEME_NONE;
+}
+
+/** Karten für die Übungsrunde: Fach, Thema und nur Karten mit Antwort. */
+function practiceCards() {
+  const { filter, theme } = state.practice;
+  return cardsForSubject(filter).filter((card) => (theme === ALL_THEMES || themeOf(card) === theme) && isPracticable(card));
 }
 
 function pluralCards(n) {
@@ -275,6 +346,7 @@ function mergeRemote(remoteCards, sha) {
 async function loadAndMerge() {
   const { cards, sha } = await fetchCards(state.settings);
   mergeRemote(cards.map(normalizeCard), sha);
+  ensureNumbers(); // vor jedem Speichern: Nummern eindeutig
   persistLocally();
   refreshAfterDataChange();
 }
@@ -311,8 +383,12 @@ function syncFromRemote({ announce = false } = {}) {
 
 /** Markiert eine Karte als geändert und plant das verzögerte Speichern. */
 function markChanged(id) {
+  markChangedMany([id]);
+}
+
+function markChangedMany(ids) {
   state.rev += 1;
-  state.pending.set(id, state.rev);
+  for (const id of ids) state.pending.set(id, state.rev);
   persistLocally();
   setSyncStatus(hasValidSettings(state.settings) ? 'dirty' : 'unconfigured');
   scheduleSave();
@@ -459,7 +535,7 @@ function fillSubjectSelect(select, subjects, current) {
   all.value = ALL_SUBJECTS;
   select.append(all);
   for (const subject of subjects) {
-    const option = el('option', null, subject);
+    const option = el('option', null, fachName(subject));
     option.value = subject;
     select.append(option);
   }
@@ -472,13 +548,42 @@ function renderSubjects() {
   state.practice.filter = fillSubjectSelect(dom.practiceFilter, subjects, state.practice.filter);
   state.editor.filter = fillSubjectSelect(dom.listFilter, subjects, state.editor.filter);
 
+  const suggestions = new Set([...FAECHER.map((f) => f.kurz), ...state.cards.map((card) => card.fach)]);
   dom.fachList.replaceChildren(
-    ...subjects.map((subject) => {
+    ...[...suggestions].map((value) => {
       const option = document.createElement('option');
-      option.value = subject;
+      option.value = value;
       return option;
     }),
   );
+  renderThemeSelect();
+}
+
+/** Thema-Filter beim Üben: Merker des gewählten Fachs, eigene Einträge, ohne Verknüpfung. */
+function renderThemeSelect() {
+  const counts = new Map();
+  for (const card of cardsForSubject(state.practice.filter)) {
+    if (!isPracticable(card)) continue;
+    const theme = themeOf(card);
+    counts.set(theme, (counts.get(theme) || 0) + 1);
+  }
+  const label = (theme) =>
+    theme === THEME_EIGEN ? 'Eigene Einträge' : theme === THEME_NONE ? 'Ohne Verknüpfung' : merkerTitle(theme) || theme;
+  const themes = [...counts.keys()].sort((a, b) => label(a).localeCompare(label(b), 'de'));
+  if (state.practice.theme !== ALL_THEMES && !counts.has(state.practice.theme)) state.practice.theme = ALL_THEMES;
+
+  const all = el('option', null, 'Alle Themen');
+  all.value = ALL_THEMES;
+  dom.practiceTheme.replaceChildren(
+    all,
+    ...themes.map((theme) => {
+      const option = el('option', null, `${label(theme)} (${counts.get(theme)})`);
+      option.value = theme;
+      return option;
+    }),
+  );
+  dom.practiceTheme.value = state.practice.theme;
+  dom.practiceTheme.hidden = themes.length < 2;
 }
 
 /* ------------------------------------------------------------------ */
@@ -487,7 +592,7 @@ function renderSubjects() {
 
 /** Baut die Übungsreihenfolge für das gewählte Fach neu auf (gemischt). */
 function startRound() {
-  const ids = cardsForSubject(state.practice.filter).map((card) => card.id);
+  const ids = practiceCards().map((card) => card.id);
   Object.assign(state.practice, { order: shuffle(ids), index: 0, known: 0, again: 0 });
   renderPractice({ animate: true });
 }
@@ -498,7 +603,7 @@ function startRound() {
  */
 function reconcilePracticeOrder() {
   const p = state.practice;
-  const validIds = new Set(cardsForSubject(p.filter).map((card) => card.id));
+  const validIds = new Set(practiceCards().map((card) => card.id));
   const done = p.order.slice(0, p.index).filter((id) => validIds.has(id));
   const upcoming = p.order.slice(p.index).filter((id) => validIds.has(id));
   const known = new Set(p.order);
@@ -548,11 +653,13 @@ function renderPractice({ animate = false } = {}) {
   }
 
   if (total === 0) {
-    showPracticeEmpty('🔍', 'Keine Karten in diesem Fach', `Im Fach „${p.filter}“ gibt es noch keine Karten.`, {
+    showPracticeEmpty('🔍', 'Keine Karten zum Üben', 'In dieser Auswahl gibt es keine Karten mit Antwort.', {
       label: 'Alle Fächer üben',
       onClick: () => {
         state.practice.filter = ALL_SUBJECTS;
+        state.practice.theme = ALL_THEMES;
         dom.practiceFilter.value = ALL_SUBJECTS;
+        renderThemeSelect();
         startRound();
       },
     });
@@ -571,8 +678,9 @@ function renderPractice({ animate = false } = {}) {
 
   dom.practiceEmpty.hidden = true;
   dom.practiceArea.hidden = false;
-  dom.progress.textContent = `Karte ${p.index + 1} von ${total}`;
-  showCard(currentPracticeCard(), animate);
+  const current = currentPracticeCard();
+  dom.progress.textContent = `Karte ${p.index + 1} von ${total} · ${formatNr(current.nr)}`;
+  showCard(current, animate);
 }
 
 /** Setzt die Karte ohne sichtbare Rückdreh-Animation auf die Vorderseite und füllt die Texte. */
@@ -580,10 +688,11 @@ function showCard(card, animate) {
   const inner = dom.flashcard.firstElementChild;
   inner.classList.add('no-transition');
   setFlipped(false);
+  const view = cardView(card);
   dom.cardFachFront.textContent = card.fach;
   dom.cardFachBack.textContent = card.fach;
-  dom.cardQuestion.textContent = card.frage;
-  dom.cardAnswer.textContent = card.antwort;
+  dom.cardQuestion.textContent = view.frage;
+  dom.cardAnswer.textContent = view.antwort;
   dom.cardFront.scrollTop = 0;
   dom.cardBack.scrollTop = 0;
   void inner.offsetWidth;
@@ -660,17 +769,42 @@ function handleFormSubmit(event) {
   }
 }
 
-function addCard({ fach, frage, antwort }) {
-  const card = { id: createId(), fach, frage, antwort, status: 'neu', wiederholungen: 0, letzteUebung: null };
+/** Legt eine Karte mit der nächsten freien Nummer an (auch für „Lücken“ und „Wissen“). */
+function createCard({ fach, frage, antwort, quelle = null }) {
+  const card = normalizeCard({ id: createId(), fach, frage, antwort, quelle, nr: nextNr() });
   state.cards.push(card);
   markChanged(card.id);
+  return card;
+}
+
+/** Erzeugt Karten für alles Wissen, zu dem es noch keine Karte gibt. */
+function generateMissingCards() {
+  const existing = new Set(state.cards.map((card) => card.quelle).filter(Boolean));
+  const missing = allWissenCards().filter((d) => d.antwort && !existing.has(d.quelle));
+  let nr = nextNr();
+  const created = missing.map((d) => normalizeCard({ id: createId(), fach: d.fach, frage: d.frage, antwort: d.antwort, quelle: d.quelle, nr: nr++ }));
+  if (!created.length) return 0;
+  state.cards.push(...created);
+  markChangedMany(created.map((card) => card.id));
+  refreshAfterDataChange();
+  renderLuecken();
+  return created.length;
+}
+
+function countMissingCards() {
+  const existing = new Set(state.cards.map((card) => card.quelle).filter(Boolean));
+  return allWissenCards().filter((d) => d.antwort && !existing.has(d.quelle)).length;
+}
+
+function addCard({ fach, frage, antwort }) {
+  const card = createCard({ fach, frage, antwort });
 
   // Fach bleibt stehen, damit mehrere Karten desselben Fachs schnell erfasst werden können
   dom.inputFrage.value = '';
   dom.inputAntwort.value = '';
   dom.inputFrage.focus();
   refreshAfterDataChange();
-  showToast('Karte hinzugefügt', 'success');
+  showToast(`Karte ${formatNr(card.nr)} hinzugefügt`, 'success');
 }
 
 function updateCard(id, { fach, frage, antwort }) {
@@ -680,6 +814,10 @@ function updateCard(id, { fach, frage, antwort }) {
     showToast('Diese Karte existiert nicht mehr', 'error');
     return;
   }
+  const view = cardView(card);
+  const textChanged = view.frage !== frage || view.antwort !== antwort;
+  // Eigener Text bei einer Wissens-Karte: als eigene Fassung speichern, Verknüpfung bleibt
+  if (card.quelle && textChanged) card.eigeneFassung = true;
   Object.assign(card, { fach, frage, antwort });
   markChanged(id);
   exitEditMode();
@@ -691,10 +829,11 @@ function enterEditMode(id) {
   const card = findCard(id);
   if (!card) return;
   state.editor.editingId = id;
+  const view = cardView(card);
   dom.inputFach.value = card.fach;
-  dom.inputFrage.value = card.frage;
-  dom.inputAntwort.value = card.antwort;
-  dom.formTitle.textContent = 'Karte bearbeiten';
+  dom.inputFrage.value = view.frage;
+  dom.inputAntwort.value = view.antwort;
+  dom.formTitle.textContent = `Karte ${formatNr(card.nr)} bearbeiten`;
   dom.submitBtn.textContent = 'Änderungen speichern';
   dom.cancelEditBtn.hidden = false;
   dom.form.classList.add('is-editing');
@@ -743,11 +882,22 @@ function buildCardListItem(card) {
   item.dataset.id = card.id;
   if (card.id === state.editor.editingId) item.classList.add('is-editing');
 
+  const view = cardView(card);
   const meta = el('div', 'list-meta');
-  meta.append(el('span', 'badge', card.fach), el('span', `status-chip status-${card.status}`, STATUS_LABELS[card.status]));
+  meta.append(
+    el('span', 'card-nr', formatNr(card.nr)),
+    el('span', 'badge', card.fach),
+    el('span', `status-chip status-${card.status}`, STATUS_LABELS[card.status]),
+  );
+  if (!view.antwort.trim()) meta.append(el('span', 'tag tag-draft', 'Antwort offen'));
 
   const body = el('div', 'list-body');
-  body.append(el('p', 'list-question', card.frage), el('p', 'list-answer', card.antwort));
+  body.append(el('p', 'list-question', view.frage), el('p', 'list-answer', view.antwort));
+  if (card.quelle) {
+    const link = el('p', 'list-link', view.pfad ? `🔗 ${view.pfad}` : '🔗 Verknüpfte Stelle im Wissen nicht gefunden');
+    if (card.eigeneFassung) link.append(el('span', 'tag', 'eigene Fassung'));
+    body.append(link);
+  }
 
   const actions = el('div', 'list-actions');
   const edit = el('button', 'btn btn-small btn-secondary', '✎ Bearbeiten');
@@ -764,11 +914,17 @@ function buildCardListItem(card) {
 
 function renderCardList() {
   const total = state.cards.length;
-  const visible = cardsForSubject(state.editor.filter).slice().reverse(); // neueste zuerst
+  const visible = cardsForSubject(state.editor.filter).slice().sort((a, b) => (b.nr || 0) - (a.nr || 0)); // neueste zuerst
 
   dom.cardCounter.textContent =
     state.editor.filter === ALL_SUBJECTS ? `(${total})` : `(${visible.length} von ${total})`;
-  dom.cardList.replaceChildren(...visible.map(buildCardListItem));
+  // Große Bestände seitenweise zeigen, damit die Liste flüssig bleibt
+  const editing = state.editor.editingId ? visible.filter((c) => c.id === state.editor.editingId) : [];
+  const page = visible.slice(0, state.editor.limit);
+  if (editing.length && !page.includes(editing[0])) page.unshift(editing[0]);
+  dom.cardList.replaceChildren(...page.map(buildCardListItem));
+  dom.listMore.hidden = visible.length <= state.editor.limit;
+  dom.listMore.textContent = `Weitere anzeigen (${visible.length - Math.min(visible.length, state.editor.limit)} übrig)`;
 
   dom.listEmpty.hidden = visible.length > 0;
   if (visible.length === 0) {
@@ -795,7 +951,46 @@ function refreshAfterDataChange() {
   renderPractice();
   // Ist dieselbe Karte noch dran, bleibt sie umgedreht
   if (before && currentPracticeCard() === before && flipped) setFlipped(true);
+  renderLuecken();
 }
+
+/* ------------------------------------------------------------------ */
+/* Brücke für „Wissen“ und „Lücken“                                    */
+/* ------------------------------------------------------------------ */
+
+const cardBridge = {
+  cards: () => state.cards,
+  view: cardView,
+  formatNr,
+  forQuelle: (quelle) => state.cards.filter((card) => card.quelle === quelle),
+  /** Neue Karte; mit Quelle wird der Text aus dem Wissen übernommen. */
+  create(data) {
+    const card = createCard(data);
+    refreshAfterDataChange();
+    return card;
+  },
+  createFromQuelle(quelle) {
+    const linked = wissenCard(quelle);
+    if (!linked) return null;
+    return cardBridge.create({ fach: linked.fach, frage: linked.frage, antwort: linked.antwort, quelle });
+  },
+  /** Verknüpft eine bestehende Karte mit dem Wissen; ihr eigener Text bleibt erhalten. */
+  link(id, quelle) {
+    const card = findCard(id);
+    if (!card) return;
+    card.quelle = quelle;
+    card.eigeneFassung = true;
+    markChanged(id);
+    refreshAfterDataChange();
+  },
+  generateMissing: generateMissingCards,
+  countMissing: countMissingCards,
+  edit(id) {
+    switchTab('create');
+    enterEditMode(id);
+  },
+  canSave: () => hasValidSettings(state.settings),
+};
 
 /* ------------------------------------------------------------------ */
 /* Einstellungen                                                       */
@@ -937,6 +1132,12 @@ function bindEvents() {
 
   dom.practiceFilter.addEventListener('change', () => {
     state.practice.filter = dom.practiceFilter.value;
+    state.practice.theme = ALL_THEMES;
+    renderThemeSelect();
+    startRound();
+  });
+  dom.practiceTheme.addEventListener('change', () => {
+    state.practice.theme = dom.practiceTheme.value;
     startRound();
   });
   dom.shuffleBtn.addEventListener('click', startRound);
@@ -953,7 +1154,17 @@ function bindEvents() {
   dom.cancelEditBtn.addEventListener('click', exitEditMode);
   dom.listFilter.addEventListener('change', () => {
     state.editor.filter = dom.listFilter.value;
+    state.editor.limit = LIST_PAGE_SIZE;
     renderCardList();
+  });
+  dom.listMore.addEventListener('click', () => {
+    state.editor.limit += LIST_PAGE_SIZE;
+    renderCardList();
+  });
+
+  // Geändertes Wissen ändert die Texte verknüpfter Karten
+  document.addEventListener('wissen:changed', () => {
+    refreshAfterDataChange();
   });
   dom.cardList.addEventListener('click', handleListClick);
 
@@ -983,6 +1194,8 @@ function bindEvents() {
 function init() {
   bindEvents();
   initWissen({ getSettings: () => state.settings });
+  setCardBridge(cardBridge);
+  initLuecken({ getSettings: () => state.settings, cards: cardBridge });
   restoreTab();
   restoreFromCache();
   state.lastRemoteIds = state.cards.filter((card) => !state.pending.has(card.id)).map((card) => card.id);

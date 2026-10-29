@@ -344,16 +344,36 @@ function renderBlock(merker, block) {
 
   const body = el('div', 'block-body');
   const ctx = () => linkCtx({ merkerId: merker.id, fach: merker.fach });
-  body.append(
-    section('1. Praxisbezug', false, () => renderPraxis(merker, block, ctx())),
-    section('2. Glossar', true, () => renderGlossar(block, ctx)),
-    section('3. Prüfungsbezug', false, () => renderPruefung(block, ctx())),
-    section('4. Managementsprache', false, () => renderManagement(block, ctx())),
-    section('5. Abschluss', true, () => renderAbschluss(block, ctx())),
-    section('6. Abweichungen', false, () => renderAbweichungen(block, ctx())),
-  );
+  const has = blockContent(block);
+  // Glossar und Abschluss sind offen; fehlt das Glossar (z. B. Kurzüberblick), öffnet der Prüfungsbezug
+  const openPruefung = !has.glossar && has.pruefung;
+  const sections = [
+    [has.praxis, '1. Praxisbezug', false, () => renderPraxis(merker, block, ctx())],
+    [has.glossar, '2. Glossar', true, () => renderGlossar(block, ctx)],
+    [has.pruefung, '3. Prüfungsbezug', openPruefung, () => renderPruefung(block, ctx())],
+    [has.management, '4. Managementsprache', false, () => renderManagement(block, ctx())],
+    [has.abschluss, '5. Abschluss', true, () => renderAbschluss(block, ctx())],
+    [has.abweichungen, '6. Abweichungen', false, () => renderAbweichungen(block, ctx())],
+  ];
+  // Leere Bezüge werden nicht angezeigt; die Nummerierung bleibt wie im Merker
+  sections.filter(([present]) => present).forEach(([, title, open, build]) => body.append(section(title, open, build)));
   details.append(body);
   return details;
+}
+
+/** Welche der sechs Bezüge haben Inhalt? */
+function blockContent(block) {
+  const p = block.praxis;
+  const pr = block.pruefung;
+  const m = block.management;
+  return {
+    praxis: Boolean(p.wann || p.wofuer || p.warum || p.verknuepfung),
+    glossar: block.glossar.length > 0,
+    pruefung: Boolean(pr.text || pr.zuordnung.length || pr.tabelle || pr.nachtrag),
+    management: Boolean(m.aussagen.length || m.uebersetzungen.length || m.musterantwort),
+    abschluss: Boolean(block.abschluss.kernaussage || block.abschluss.feynman),
+    abweichungen: block.abweichungen.length > 0,
+  };
 }
 
 /** Aufklappbarer Abschnitt; der Inhalt wird erst beim ersten Öffnen gebaut. */

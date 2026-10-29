@@ -2018,3 +2018,201 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 }
 
 .practice-help + .rate-buttons { margin-top: 14px; }
+
+/* ---------- Üben: Tagesplan, Fortschritt, Multiple Choice ---------- */
+
+.practice-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.select-compact {
+  width: auto;
+  min-width: 150px;
+}
+
+#free-toolbar { margin-bottom: 14px; }
+
+.session-bar {
+  margin-bottom: 14px;
+}
+
+.session-text {
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.session-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.session-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s ease;
+}
+
+.card-enter { animation: card-enter 0.3s ease; }
+
+.mc {
+  width: 100%;
+  max-width: 620px;
+}
+
+.mc-question {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 24px 26px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.mc-question .badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  max-width: calc(100% - 28px);
+}
+
+.mc-prompt {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mc-prompt-long {
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.mc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mc-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  touch-action: manipulation;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.mc-option:active:not(:disabled) { transform: scale(0.99); }
+.mc-option:disabled { cursor: default; }
+
+.mc-key {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.mc-text { overflow-wrap: anywhere; }
+
+.mc-option.is-correct {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+}
+
+.mc-option.is-correct .mc-key { background: var(--success); color: #ffffff; }
+
+.mc-option.is-wrong {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
+.mc-option.is-wrong .mc-key { background: var(--danger); color: #ffffff; }
+
+@media (hover: hover) {
+  .mc-option:hover:not(:disabled) { border-color: var(--accent); }
+}
+
+.mc-feedback {
+  margin-top: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mc-feedback[data-result="richtig"] { color: var(--success); }
+.mc-feedback[data-result="falsch"] { color: var(--danger); }
+
+.mc-explain {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.mc-explain .face-label { display: block; margin-bottom: 4px; }
+
+.mc-next {
+  width: 100%;
+  max-width: 620px;
+  min-height: 52px;
+  margin-top: 14px;
+  font-size: 1rem;
+}
+
+.empty-actions { justify-content: center; margin-top: 12px; }
+
+.plan { margin-top: 28px; }
+.plan > summary { cursor: pointer; font-weight: 700; }
+.plan > p { margin: 10px 0; }
+
+@media (prefers-color-scheme: dark) {
+  .mc-option.is-correct .mc-key,
+  .mc-option.is-wrong .mc-key { color: #0f1115; }
+}
+
+@media (max-width: 600px) {
+  .practice-top { flex-direction: column; align-items: stretch; }
+  #practice-mode { display: grid; grid-template-columns: 1fr 1fr; }
+  .select-compact { flex: 1; }
+  .mc-question { padding: 40px 16px 20px; }
+  .mc-prompt { font-size: 1.12rem; }
+  .mc-prompt-long { font-size: 0.95rem; }
+}

@@ -20,22 +20,10 @@ import {
   saveCards,
 } from './github-sync.js';
 import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
-import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge, openSheet, openMerker, openEntry } from './wissen.js';
-import {
-  FAECHER,
-  fachKey,
-  fachLabel,
-  fachName,
-  wissenCard,
-  allWissenCards,
-  merkerTitle,
-  quelleGroup,
-  createLinker,
-  termsInText,
-  targetName,
-  targetForQuelle,
-} from './wissen-data.js';
-import { renderRich } from './richtext.js';
+import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
+import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
+import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
+import { initProgress, restoreProgress, loadProgress, flushProgress, migrateFromCards, statusOf, clearProgressCache } from './progress.js';
 import { initLuecken, renderLuecken } from './luecken.js';
 
 const SAVE_DELAY_MS = 1200;
@@ -44,9 +32,6 @@ const ALL_SUBJECTS = '__all__';
 const VALID_STATUS = ['neu', 'lernen', 'gelernt'];
 const STATUS_LABELS = { neu: 'Neu', lernen: 'Lernen', gelernt: 'Gelernt' };
 const LIST_PAGE_SIZE = 100;
-const ALL_THEMES = '__all__';
-const THEME_EIGEN = 'eigen';
-const THEME_NONE = '__ohne__';
 
 /* ------------------------------------------------------------------ */
 /* Zustand                                                             */
@@ -67,15 +52,6 @@ const state = {
   saveQueued: false,
   syncStatus: 'idle',
   tab: 'practice',
-  practice: {
-    filter: ALL_SUBJECTS,
-    theme: ALL_THEMES,
-    order: [],
-    index: 0,
-    flipped: false,
-    known: 0,
-    again: 0,
-  },
   editor: {
     editingId: null,
     filter: ALL_SUBJECTS,
@@ -103,30 +79,7 @@ const dom = {
   syncStatus: $('sync-status'),
   openSettings: $('open-settings'),
 
-  practiceFilter: $('practice-filter'),
-  practiceTheme: $('practice-theme'),
-  shuffleBtn: $('shuffle-btn'),
   syncBtn: $('sync-btn'),
-  practiceArea: $('practice-area'),
-  progress: $('practice-progress'),
-  cardScene: $('card-scene'),
-  flashcard: $('flashcard'),
-  cardFront: $('card-front'),
-  cardBack: $('card-back'),
-  cardFachFront: $('card-fach-front'),
-  cardFachBack: $('card-fach-back'),
-  cardQuestion: $('card-question'),
-  cardAnswer: $('card-answer'),
-  rateAgain: $('rate-again'),
-  hintBtn: $('hint-btn'),
-  hintBox: $('hint-box'),
-  cardLinks: $('card-links'),
-  rateKnown: $('rate-known'),
-  practiceEmpty: $('practice-empty'),
-  practiceEmptyIcon: $('practice-empty-icon'),
-  practiceEmptyTitle: $('practice-empty-title'),
-  practiceEmptyText: $('practice-empty-text'),
-  practiceEmptyAction: $('practice-empty-action'),
 
   form: $('card-form'),
   formTitle: $('form-title'),
@@ -162,16 +115,6 @@ const dom = {
 
 function createId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/** Fisher-Yates-Shuffle, liefert eine neue Liste. */
-function shuffle(items) {
-  const result = items.slice();
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
 }
 
 /** Bringt geladene Karten in eine verlässliche Form (fehlende Felder, falsche Typen). */
@@ -213,11 +156,6 @@ function cardView(card) {
   return { frage: card.frage, antwort: card.antwort, pfad: linked ? linked.pfad : null };
 }
 
-/** Karten ohne Antwort (offene Lücken) werden beim Üben übersprungen. */
-function isPracticable(card) {
-  return cardView(card).antwort.trim() !== '';
-}
-
 /**
  * Vergibt fortlaufende Nummern: Karten ohne Nummer und doppelte Nummern
  * (z. B. zwei Geräte offline) bekommen die nächste freie. Die zuerst
@@ -250,16 +188,6 @@ function getSubjects() {
 
 function cardsForSubject(subject) {
   return subject === ALL_SUBJECTS ? state.cards : state.cards.filter((card) => fachKey(card.fach) === subject);
-}
-
-function themeOf(card) {
-  return quelleGroup(card.quelle) || THEME_NONE;
-}
-
-/** Karten für die Übungsrunde: Fach, Thema und nur Karten mit Antwort. */
-function practiceCards() {
-  const { filter, theme } = state.practice;
-  return cardsForSubject(filter).filter((card) => (theme === ALL_THEMES || themeOf(card) === theme) && isPracticable(card));
 }
 
 function pluralCards(n) {
@@ -394,6 +322,10 @@ function syncFromRemote({ announce = false } = {}) {
     }
     if (announce) showToast(`${pluralCards(state.cards.length)} geladen`, 'success');
     syncWissen(); // Merker und eigene Einträge laufen unabhängig von den Karten
+    // Lernstand getrennt laden; bisherige Bewertungen einmalig übernehmen
+    loadProgress().then((ok) => {
+      if (ok && migrateFromCards(state.cards)) refreshAfterDataChange();
+    });
     return true;
   });
 }
@@ -563,7 +495,6 @@ function fillSubjectSelect(select, subjects, current) {
 
 function renderSubjects() {
   const subjects = getSubjects();
-  state.practice.filter = fillSubjectSelect(dom.practiceFilter, subjects, state.practice.filter);
   state.editor.filter = fillSubjectSelect(dom.listFilter, subjects, state.editor.filter);
 
   const suggestions = new Set([...FAECHER.map((f) => f.kurz), ...state.cards.map((card) => card.fach)]);
@@ -574,288 +505,6 @@ function renderSubjects() {
       return option;
     }),
   );
-  renderThemeSelect();
-}
-
-/** Thema-Filter beim Üben: Merker des gewählten Fachs, eigene Einträge, ohne Verknüpfung. */
-function renderThemeSelect() {
-  const counts = new Map();
-  for (const card of cardsForSubject(state.practice.filter)) {
-    if (!isPracticable(card)) continue;
-    const theme = themeOf(card);
-    counts.set(theme, (counts.get(theme) || 0) + 1);
-  }
-  const label = (theme) =>
-    theme === THEME_EIGEN ? 'Eigene Einträge' : theme === THEME_NONE ? 'Ohne Verknüpfung' : merkerTitle(theme) || theme;
-  const themes = [...counts.keys()].sort((a, b) => label(a).localeCompare(label(b), 'de'));
-  if (state.practice.theme !== ALL_THEMES && !counts.has(state.practice.theme)) state.practice.theme = ALL_THEMES;
-
-  const all = el('option', null, 'Alle Themen');
-  all.value = ALL_THEMES;
-  dom.practiceTheme.replaceChildren(
-    all,
-    ...themes.map((theme) => {
-      const option = el('option', null, `${label(theme)} (${counts.get(theme)})`);
-      option.value = theme;
-      return option;
-    }),
-  );
-  dom.practiceTheme.value = state.practice.theme;
-  dom.practiceTheme.hidden = themes.length < 2;
-}
-
-/* ------------------------------------------------------------------ */
-/* Üben                                                                */
-/* ------------------------------------------------------------------ */
-
-/** Baut die Übungsreihenfolge für das gewählte Fach neu auf (gemischt). */
-function startRound() {
-  const ids = practiceCards().map((card) => card.id);
-  Object.assign(state.practice, { order: shuffle(ids), index: 0, known: 0, again: 0 });
-  renderPractice({ animate: true });
-}
-
-/**
- * Passt die laufende Runde an geänderte Daten an (Sync, Bearbeiten, Löschen),
- * ohne den Fortschritt zu verlieren. Neue Karten werden hinten angehängt.
- */
-function reconcilePracticeOrder() {
-  const p = state.practice;
-  const validIds = new Set(practiceCards().map((card) => card.id));
-  const done = p.order.slice(0, p.index).filter((id) => validIds.has(id));
-  const upcoming = p.order.slice(p.index).filter((id) => validIds.has(id));
-  const known = new Set(p.order);
-  const added = shuffle([...validIds].filter((id) => !known.has(id)));
-  p.order = [...done, ...upcoming, ...added];
-  p.index = done.length;
-}
-
-function currentPracticeCard() {
-  const id = state.practice.order[state.practice.index];
-  return id ? findCard(id) : null;
-}
-
-function showPracticeEmpty(icon, title, text, action = null) {
-  dom.practiceArea.hidden = true;
-  dom.practiceEmpty.hidden = false;
-  dom.practiceEmptyIcon.textContent = icon;
-  dom.practiceEmptyTitle.textContent = title;
-  dom.practiceEmptyText.textContent = text;
-  dom.practiceEmptyAction.hidden = !action;
-  if (action) {
-    dom.practiceEmptyAction.textContent = action.label;
-    dom.practiceEmptyAction.onclick = action.onClick;
-  }
-}
-
-function renderPractice({ animate = false } = {}) {
-  const p = state.practice;
-  const total = p.order.length;
-
-  if (state.cards.length === 0) {
-    if (!hasValidSettings(state.settings)) {
-      showPracticeEmpty('🔌', 'Noch nicht verbunden', 'Verbinde zuerst dein GitHub-Repository, um deine Karten zu laden.', {
-        label: 'Einstellungen öffnen',
-        onClick: openSettings,
-      });
-    } else {
-      showPracticeEmpty('🗂️', 'Noch keine Karten', 'Lege im Tab „Erstellen“ deine erste Lernkarte an.', {
-        label: 'Karte erstellen',
-        onClick: () => {
-          switchTab('create');
-          dom.inputFach.focus();
-        },
-      });
-    }
-    return;
-  }
-
-  if (total === 0) {
-    showPracticeEmpty('🔍', 'Keine Karten zum Üben', 'In dieser Auswahl gibt es keine Karten mit Antwort.', {
-      label: 'Alle Fächer üben',
-      onClick: () => {
-        state.practice.filter = ALL_SUBJECTS;
-        state.practice.theme = ALL_THEMES;
-        dom.practiceFilter.value = ALL_SUBJECTS;
-        renderThemeSelect();
-        startRound();
-      },
-    });
-    return;
-  }
-
-  if (p.index >= total) {
-    showPracticeEmpty(
-      '🎉',
-      'Runde geschafft!',
-      `Du hast ${pluralCards(total)} geübt: ${p.known} gewusst, ${p.again} zum Wiederholen markiert.`,
-      { label: '🔀 Neu mischen & weiter üben', onClick: startRound },
-    );
-    return;
-  }
-
-  dom.practiceEmpty.hidden = true;
-  dom.practiceArea.hidden = false;
-  const current = currentPracticeCard();
-  dom.progress.textContent = `Karte ${p.index + 1} von ${total} · ${formatNr(current.nr)}`;
-  showCard(current, animate);
-}
-
-/** Setzt die Karte ohne sichtbare Rückdreh-Animation auf die Vorderseite und füllt die Texte. */
-function showCard(card, animate) {
-  const inner = dom.flashcard.firstElementChild;
-  inner.classList.add('no-transition');
-  setFlipped(false);
-  const view = cardView(card);
-  dom.cardFachFront.textContent = card.fach;
-  dom.cardFachBack.textContent = card.fach;
-  dom.cardQuestion.textContent = view.frage;
-  // Begriffe in der Antwort sind antippbar und öffnen die Erklärung
-  dom.cardAnswer.replaceChildren(renderRich(view.antwort, { linker: practiceLinker, linked: new Set(), ...linkContext(card) }));
-  dom.hintBox.hidden = true;
-  dom.hintBtn.hidden = false;
-  dom.hintBtn.setAttribute('aria-expanded', 'false');
-  dom.cardLinks.hidden = true;
-  dom.cardFront.scrollTop = 0;
-  dom.cardBack.scrollTop = 0;
-  void inner.offsetWidth;
-  inner.classList.remove('no-transition');
-
-  if (animate) {
-    dom.cardScene.classList.remove('card-enter');
-    void dom.cardScene.offsetWidth;
-    dom.cardScene.classList.add('card-enter');
-  }
-}
-
-function setFlipped(flipped) {
-  state.practice.flipped = flipped;
-  const card = currentPracticeCard();
-  dom.hintBtn.hidden = flipped;
-  if (flipped) dom.hintBox.hidden = true;
-  if (flipped && card) renderCardLinks(card);
-  else dom.cardLinks.hidden = true;
-  dom.flashcard.classList.toggle('is-flipped', flipped);
-  dom.cardFront.setAttribute('aria-hidden', String(flipped));
-  dom.cardBack.setAttribute('aria-hidden', String(!flipped));
-  dom.flashcard.setAttribute('aria-label', flipped ? 'Karte zurückdrehen' : 'Karte umdrehen, Antwort zeigen');
-}
-
-function flipCard() {
-  if (!currentPracticeCard()) return;
-  setFlipped(!state.practice.flipped);
-}
-
-/* ---------- Tipps und Verweise ---------- */
-
-const practiceLinker = createLinker((target) => openSheet(target));
-const MAX_HINT_TERMS = 4;
-const MAX_LINK_TERMS = 8;
-
-/** Kontext für Verlinkung: eigener Begriff wird nicht auf sich selbst verlinkt. */
-function linkContext(card) {
-  const ziel = targetForQuelle(card.quelle);
-  return {
-    fach: fachKey(card.fach),
-    merkerId: ziel && ziel.merker ? ziel.merker.id : null,
-    selfId: ziel ? (ziel.term ? ziel.term.id : ziel.entry ? `e:${ziel.entry.id}` : null) : null,
-  };
-}
-
-/** Begriffe aus dem Wissen, die zur Karte passen (bei unverknüpften Karten auch aus der Frage). */
-function relatedTerms(card) {
-  const view = cardView(card);
-  const ctx = linkContext(card);
-  const text = card.quelle ? view.antwort : `${view.frage}\n${view.antwort}`;
-  return termsInText(text, ctx);
-}
-
-function chip(label, onClick) {
-  const node = el('button', 'chip chip-small', label);
-  node.type = 'button';
-  node.addEventListener('click', onClick);
-  return node;
-}
-
-/** Tipp: Thema und Schlüsselbegriffe, ohne die Antwort zu verraten. */
-function showHint() {
-  const card = currentPracticeCard();
-  if (!card || state.practice.flipped) return;
-  if (!dom.hintBox.hidden) {
-    dom.hintBox.hidden = true;
-    dom.hintBtn.setAttribute('aria-expanded', 'false');
-    return;
-  }
-  const view = cardView(card);
-  const ziel = targetForQuelle(card.quelle);
-  dom.hintBox.replaceChildren();
-  if (ziel && ziel.block) dom.hintBox.append(el('p', null, `Thema: ${ziel.block.id} · ${ziel.block.titel}`));
-  else if (ziel && ziel.entry) dom.hintBox.append(el('p', null, 'Aus deinen eigenen Einträgen'));
-
-  const ctx = linkContext(card);
-  const keyTerms = termsInText(view.antwort, ctx).slice(0, MAX_HINT_TERMS).map(targetName);
-  if (keyTerms.length) {
-    dom.hintBox.append(el('p', null, `Denk an: ${keyTerms.join(' · ')}`));
-  } else {
-    const words = view.antwort.split(/\s+/).filter(Boolean);
-    const start = words.slice(0, 3).join(' ');
-    if (start) dom.hintBox.append(el('p', null, `Beginnt mit: „${start}${words.length > 3 ? ' …' : ''}“`));
-  }
-  if (!dom.hintBox.childElementCount) dom.hintBox.append(el('p', null, 'Für diese Karte gibt es keinen Tipp.'));
-  dom.hintBox.hidden = false;
-  dom.hintBtn.setAttribute('aria-expanded', 'true');
-}
-
-function openZiel(ziel) {
-  if (ziel.term) openSheet(ziel.term);
-  else if (ziel.item) openSheet(ziel.item);
-  else if (ziel.entry) openEntry(ziel.entry.id);
-  else if (ziel.abk) openSheet(ziel.abk);
-  else if (ziel.block) openMerker(ziel.merker.id, ziel.block.id);
-}
-
-/** Nach dem Umdrehen: Fundstelle im Wissen und Verweise auf verwandte Begriffe. */
-function renderCardLinks(card) {
-  const view = cardView(card);
-  const ziel = targetForQuelle(card.quelle);
-  const terms = relatedTerms(card).slice(0, MAX_LINK_TERMS);
-  dom.cardLinks.replaceChildren();
-  if (ziel && view.pfad) {
-    const row = el('div', 'card-links-row');
-    row.append(el('span', 'card-links-label', '🔗 Fundstelle'), el('span', 'card-links-path', view.pfad));
-    const open = el('button', 'btn btn-small btn-secondary', 'Im Wissen ansehen ›');
-    open.type = 'button';
-    open.addEventListener('click', () => openZiel(ziel));
-    row.append(open);
-    dom.cardLinks.append(row);
-  }
-  if (terms.length) {
-    const row = el('div', 'card-links-row');
-    row.append(el('span', 'card-links-label', card.quelle ? 'Siehe auch' : 'Passt zu'));
-    const chips = el('div', 'chips');
-    terms.forEach((target) => chips.append(chip(targetName(target), () => openSheet(target))));
-    row.append(chips);
-    dom.cardLinks.append(row);
-  }
-  dom.cardLinks.hidden = !dom.cardLinks.childElementCount;
-}
-
-/** Bewertet die aktuelle Karte und zeigt die nächste. */
-function rateCard(known) {
-  const card = currentPracticeCard();
-  if (!card) return;
-
-  card.status = known ? 'gelernt' : 'lernen';
-  card.wiederholungen += 1;
-  card.letzteUebung = new Date().toISOString();
-  if (known) state.practice.known += 1;
-  else state.practice.again += 1;
-  state.practice.index += 1;
-
-  markChanged(card.id);
-  renderCardList();
-  renderPractice({ animate: true });
-  if (!dom.practiceArea.hidden) dom.flashcard.focus({ preventScroll: true });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1009,7 +658,7 @@ function buildCardListItem(card) {
   meta.append(
     el('span', 'card-nr', formatNr(card.nr)),
     el('span', 'badge', card.fach),
-    el('span', `status-chip status-${card.status}`, STATUS_LABELS[card.status]),
+    el('span', `status-chip status-${statusOf(card.id)}`, STATUS_LABELS[statusOf(card.id)]),
   );
   if (!view.antwort.trim()) meta.append(el('span', 'tag tag-draft', 'Antwort offen'));
 
@@ -1067,12 +716,7 @@ function handleListClick(event) {
 function refreshAfterDataChange() {
   renderSubjects();
   renderCardList();
-  const before = currentPracticeCard();
-  const flipped = state.practice.flipped;
-  reconcilePracticeOrder();
-  renderPractice();
-  // Ist dieselbe Karte noch dran, bleibt sie umgedreht
-  if (before && currentPracticeCard() === before && flipped) setFlipped(true);
+  refreshPractice();
   renderLuecken();
 }
 
@@ -1112,6 +756,17 @@ const cardBridge = {
     enterEditMode(id);
   },
   canSave: () => hasValidSettings(state.settings),
+};
+
+const practiceBridge = {
+  cards: () => state.cards,
+  view: cardView,
+  formatNr,
+  isConfigured: () => hasValidSettings(state.settings),
+  openSettings: () => openSettings(),
+  switchTab: (tab) => switchTab(tab),
+  fillSubjectSelect: (select, current) => fillSubjectSelect(select, getSubjects(), current),
+  onGraded: () => renderCardList(),
 };
 
 /* ------------------------------------------------------------------ */
@@ -1173,6 +828,7 @@ async function handleSettingsSubmit(event) {
     state.remoteLoaded = false;
   }
   persistLocally();
+  restoreProgress();
   refreshAfterDataChange();
   reloadWissenForSettings();
 
@@ -1187,7 +843,6 @@ async function handleSettingsSubmit(event) {
     setTimeout(() => {
       if (!dom.modal.hidden) closeSettings();
     }, 900);
-    if (state.practice.order.length > 0 && state.practice.index === 0) startRound();
   } else {
     setSettingsMessage('Verbindung fehlgeschlagen. Bitte Angaben und Token prüfen.', 'error');
   }
@@ -1198,6 +853,8 @@ function handleSettingsClear() {
   clearTimeout(state.saveTimer);
   state.settings = loadSettings();
   resetDataState();
+  clearProgressCache();
+  restoreProgress();
   exitEditMode();
   refreshAfterDataChange();
   reloadWissenForSettings({ clear: true });
@@ -1219,24 +876,9 @@ function handleKeydown(event) {
     if (event.key === 'Escape') closeTopModal();
     return;
   }
-  if (state.tab !== 'practice' || dom.practiceArea.hidden || isTypingTarget(event.target)) return;
+  if (state.tab !== 'practice' || isTypingTarget(event.target)) return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-  const onOtherControl = event.target instanceof HTMLElement && event.target.closest('button, a') !== null;
-
-  if ((event.key === ' ' || event.key === 'Enter') && !onOtherControl) {
-    event.preventDefault();
-    flipCard();
-  } else if (event.key === 't' || event.key === 'T') {
-    event.preventDefault();
-    showHint();
-  } else if (event.key === '1' || event.key === 'ArrowLeft') {
-    event.preventDefault();
-    rateCard(false);
-  } else if (event.key === '2' || event.key === 'ArrowRight') {
-    event.preventDefault();
-    rateCard(true);
-  }
+  if (handlePracticeKey(event)) event.preventDefault();
 }
 
 /** Strg/Cmd + Enter in den Textfeldern schickt das Formular ab. */
@@ -1255,25 +897,10 @@ function bindEvents() {
   dom.tabs.forEach((button) => button.addEventListener('click', () => switchTab(button.dataset.tab)));
   dom.openSettings.addEventListener('click', openSettings);
 
-  dom.practiceFilter.addEventListener('change', () => {
-    state.practice.filter = dom.practiceFilter.value;
-    state.practice.theme = ALL_THEMES;
-    renderThemeSelect();
-    startRound();
-  });
-  dom.practiceTheme.addEventListener('change', () => {
-    state.practice.theme = dom.practiceTheme.value;
-    startRound();
-  });
-  dom.shuffleBtn.addEventListener('click', startRound);
   dom.syncBtn.addEventListener('click', () => {
     if (!hasValidSettings(state.settings)) openSettings();
     else syncFromRemote({ announce: true });
   });
-  dom.flashcard.addEventListener('click', flipCard);
-  dom.hintBtn.addEventListener('click', showHint);
-  dom.rateAgain.addEventListener('click', () => rateCard(false));
-  dom.rateKnown.addEventListener('click', () => rateCard(true));
 
   dom.form.addEventListener('submit', handleFormSubmit);
   dom.form.addEventListener('keydown', handleFormKeydown);
@@ -1309,11 +936,14 @@ function bindEvents() {
 
   // Beim Verlassen der App (z. B. App-Wechsel auf Android) sofort speichern statt auf den Timer zu warten
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && state.pending.size > 0) requestSave();
+    if (document.visibilityState !== 'hidden') return;
+    if (state.pending.size > 0) requestSave();
+    flushProgress();
   });
   // Nach Wiederherstellung der Verbindung einen einzelnen Speicherversuch starten
   window.addEventListener('online', () => {
     if (state.pending.size > 0) requestSave();
+    flushProgress();
   });
 }
 
@@ -1322,18 +952,16 @@ function init() {
   initWissen({ getSettings: () => state.settings });
   setCardBridge(cardBridge);
   initLuecken({ getSettings: () => state.settings, cards: cardBridge });
+  initProgress({ getSettings: () => state.settings, onChange: () => refreshAfterDataChange() });
   restoreTab();
   restoreFromCache();
   state.lastRemoteIds = state.cards.filter((card) => !state.pending.has(card.id)).map((card) => card.id);
   renderSubjects();
   renderCardList();
-  startRound();
+  initPractice(practiceBridge);
 
   if (hasValidSettings(state.settings)) {
-    syncFromRemote().then((ok) => {
-      // Neu mischen, solange noch keine Karte bewertet wurde
-      if (ok && state.practice.index === 0) startRound();
-    });
+    syncFromRemote();
   } else {
     setSyncStatus('unconfigured');
     openSettings();

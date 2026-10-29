@@ -1,25 +1,76 @@
 # Lernkartei
 
-Digitale Lernkarteikarten im Browser, für Mac (Desktop) und Android (mobil).
-Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Die Karten liegen als `cards.json` in einem GitHub-Repository und werden über die GitHub REST API gelesen und geschrieben. So sehen alle Geräte denselben Datenstand.
+Lernkarten und Nachschlagewerk im Browser, für Mac, iPad und Android.
+Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Alle Daten liegen in einem privaten GitHub-Repository und werden über die GitHub REST API gelesen und geschrieben. So sehen alle Geräte denselben Datenstand.
 
 **Funktionen**
 
 - **Üben:** Karten als 3D-Flip-Karte, Filter nach Fach, Mischen, Bewertung mit „Nochmal“ oder „Gewusst“, Fortschrittsanzeige.
 - **Erstellen:** Karten anlegen, bearbeiten und löschen (mit „Rückgängig“ im Hinweis), Fach-Vorschläge, Filter und Zähler.
-- **Sync:** Änderungen werden nach ca. 1,2 Sekunden automatisch gespeichert. Hat das andere Gerät zwischenzeitlich gespeichert, lädt die App den neueren Stand und führt ihn mit den eigenen Änderungen zusammen.
-- **Offline-tolerant:** Der zuletzt geladene Stand bleibt auf dem Gerät zwischengespeichert. Üben funktioniert auch ohne Verbindung; noch nicht gespeicherte Änderungen werden beim nächsten Sync übertragen.
+- **Wissen (Nachschlagewerk):**
+  - **Themen:** Merker je Fach mit Miniblöcken und den sechs Bezügen (Praxisbezug, Glossar, Prüfungsbezug, Managementsprache, Abschluss, Abweichungen).
+  - **A–Z:** Register aller Begriffe und eigenen Einträge.
+  - **Eigene:** eigene Einträge mit Erklärung, Beispiel und Bildern; Entwürfe sammeln sich unter „Offen“.
+  - **Suche** über Begriffe, Kürzel, Themen, Musterantworten und Managementsprache. Gibt es einen Begriff noch nicht, lässt er sich direkt als Entwurf anlegen.
+  - **Automatische Verlinkung:** Bekannte Begriffe und Kürzel (z. B. KLR, GuV) sind im Text unterstrichen; Antippen zeigt Kurzerklärung, Funktionsweise und Fundstelle.
+  - **Herkunfts-Markierungen** aus den Merkern werden farbig angezeigt: Folie und Gesetz neutral, Ergänzung blau, Nicht belegt und Fiktiv gelb, Korrektur rot.
+  - **Import** von Merkern als JSON-Datei.
+- **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert. Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
+- **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.
 - **Hell/Dunkel** wechselt automatisch mit der Systemeinstellung.
-- **Tastatur (Mac):** Leertaste dreht die Karte, `1` = Nochmal, `2` = Gewusst, `Cmd + Enter` speichert das Formular.
+- **Tastatur (Mac):** Leertaste dreht die Karte, `1` = Nochmal, `2` = Gewusst, `Cmd + Enter` speichert das Formular, `Esc` schließt Fenster.
 
 ## Projektstruktur
 
 ```
 index.html            Markup
 css/style.css         Styling (Light/Dark über CSS-Variablen)
-js/app.js             UI-Logik (Tabs, Üben, Formular, Liste, Einstellungen)
+js/app.js             Tabs, Üben, Karten-Formular und -Liste, Einstellungen
+js/wissen.js          Oberfläche des Nachschlagewerks (Themen, Register, Eigene, Suche, Import)
+js/wissen-data.js     Fächer, Laden und Prüfen der Merker, Begriffsverzeichnis, Verlinkung, Suche
+js/richtext.js        Textdarstellung: Absätze, Aufzählungen, fett, Herkunfts-Markierungen
+js/ui.js              Gemeinsame Bausteine: Elemente, Toasts, Dialoge
 js/github-sync.js     GitHub-API, Base64/UTF-8, Einstellungen, lokaler Zwischenspeicher
 ```
+
+## Aufbau des Daten-Repositorys
+
+```
+cards.json            Lernkarten
+lernstoff.json        Eigene Einträge im Nachschlagewerk
+merker/<id>.json      Ein Merker pro Datei (z. B. merker/rewe-1-externes-rechnungswesen.json)
+images/               Bilder der eigenen Einträge
+```
+
+### Merker-Format (Kurzfassung)
+
+```json
+{
+  "schema": 1,
+  "id": "rewe-1-externes-rechnungswesen",
+  "fach": "rewe",
+  "titel": "Externes Rechnungswesen: Finanzbuchhaltung",
+  "teil": "Teil 1 von 2",
+  "abkuerzungen": [{ "kurz": "KLR", "lang": "Kosten- und Leistungsrechnung" }],
+  "bloecke": [
+    {
+      "id": "A",
+      "titel": "…",
+      "folien": "Folien 2 bis 4",
+      "praxis": { "wann": "…", "wofuer": "…", "warum": "…", "verknuepfung": "…" },
+      "glossar": [{ "begriff": "…", "kurz": "…", "funktion": "…", "synonyme": [], "kuerzel": [] }],
+      "pruefung": { "text": "…", "zuordnung": [{ "frage": "…", "antwort": "…" }], "tabelle": null, "nachtrag": "" },
+      "management": { "aussagen": [], "uebersetzungen": [{ "halle": "…", "management": "…" }], "musterantwort": { "frage": "…", "hinweis": "…", "antwort": "…" } },
+      "abschluss": { "kernaussage": "…", "feynman": { "aufgabe": "…", "muss": [] } },
+      "abweichungen": [{ "typ": "Lücke", "text": "…" }]
+    }
+  ],
+  "korrekturen": [{ "id": "K2", "text": "…" }],
+  "quellen": [{ "text": "HGB § 252", "url": "https://…" }]
+}
+```
+
+Fach-IDs: `vwl-bwl`, `rewe`, `fi-inv`, `mpa`, `org`, `pm`, `ikt`. Herkunfts-Markierungen stehen direkt im Text, z. B. `(Folie 9)`, `[Gesetz: § 252 HGB]`, `[Ergänzung: IHK München]`, `[Nicht belegt: …]`, `[Fiktiv]`. `**fett**` wird fett dargestellt.
 
 ## Einrichtung
 
@@ -67,7 +118,7 @@ Beim ersten Öffnen erscheint automatisch der Dialog **GitHub-Einstellungen**:
 | Dateipfad            | `cards.json`        |
 | Personal Access Token| `github_pat_…`      |
 
-„Speichern & verbinden“ testet die Verbindung sofort. Diesen Schritt einmal auf dem Mac und einmal auf dem Android-Gerät durchführen. Tipp für Android: In Chrome über das Menü „Zum Startbildschirm hinzufügen“ wirkt die App wie eine eigene App.
+„Speichern & verbinden“ testet die Verbindung sofort. Diesen Schritt auf jedem Gerät einmal durchführen (Mac, iPad, Android). Tipp für Android: In Chrome über das Menü „Zum Startbildschirm hinzufügen“ wirkt die App wie eine eigene App.
 
 ## Datenformat
 

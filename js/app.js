@@ -2,8 +2,9 @@
  * app.js
  *
  * UI-Logik der Lernkartei: Tabs, Übungsmodus, Kartenformular, Kartenliste,
- * Einstellungen-Modal, Toasts und das verzögerte Speichern.
- * Alle GitHub- und Speicherzugriffe laufen über github-sync.js.
+ * Einstellungen-Modal und das verzögerte Speichern der Karten.
+ * Alle GitHub- und Speicherzugriffe laufen über github-sync.js,
+ * das Nachschlagewerk (Tab „Wissen“) liegt in wissen.js.
  */
 
 import {
@@ -18,10 +19,11 @@ import {
   fetchCards,
   saveCards,
 } from './github-sync.js';
+import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
+import { initWissen, syncWissen, reloadWissenForSettings } from './wissen.js';
 
 const SAVE_DELAY_MS = 1200;
-const TOAST_DURATION_MS = 2500;
-const TOAST_UNDO_DURATION_MS = 5000;
+const TAB_KEY = 'lernkartei.tab';
 const ALL_SUBJECTS = '__all__';
 const VALID_STATUS = ['neu', 'lernen', 'gelernt'];
 const STATUS_LABELS = { neu: 'Neu', lernen: 'Lernen', gelernt: 'Gelernt' };
@@ -75,7 +77,7 @@ const $ = (id) => document.getElementById(id);
 
 const dom = {
   tabs: document.querySelectorAll('.tab'),
-  views: { practice: $('view-practice'), create: $('view-create') },
+  views: { practice: $('view-practice'), create: $('view-create'), wissen: $('view-wissen') },
   syncStatus: $('sync-status'),
   openSettings: $('open-settings'),
 
@@ -125,9 +127,6 @@ const dom = {
   settingsSave: $('settings-save'),
   settingsClear: $('settings-clear'),
 
-  toast: $('toast'),
-  toastText: $('toast-text'),
-  toastAction: $('toast-action'),
 };
 
 /* ------------------------------------------------------------------ */
@@ -146,14 +145,6 @@ function shuffle(items) {
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
-}
-
-/** Erzeugt ein Element; Texte werden immer über textContent gesetzt (kein HTML-Injection-Risiko). */
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 /** Bringt geladene Karten in eine verlässliche Form (fehlende Felder, falsche Typen). */
@@ -185,42 +176,6 @@ function cardsForSubject(subject) {
 
 function pluralCards(n) {
   return `${n} ${n === 1 ? 'Karte' : 'Karten'}`;
-}
-
-/* ------------------------------------------------------------------ */
-/* Toast                                                               */
-/* ------------------------------------------------------------------ */
-
-let toastTimer = null;
-let toastActionHandler = null;
-
-/**
- * Zeigt eine kurze Meldung unten zentriert.
- * @param {'info'|'success'|'error'} type
- * @param {{label: string, onClick: Function}} [action] optionaler Button, z. B. „Rückgängig“
- */
-function showToast(message, type = 'info', action = null) {
-  clearTimeout(toastTimer);
-  dom.toastText.textContent = message;
-  dom.toast.dataset.type = type;
-  toastActionHandler = action ? action.onClick : null;
-  dom.toastAction.hidden = !action;
-  if (action) dom.toastAction.textContent = action.label;
-
-  dom.toast.hidden = false;
-  // Reflow erzwingen, damit die Einblend-Transition jedes Mal greift
-  void dom.toast.offsetWidth;
-  dom.toast.classList.add('is-visible');
-
-  toastTimer = setTimeout(hideToast, action ? TOAST_UNDO_DURATION_MS : TOAST_DURATION_MS);
-}
-
-function hideToast() {
-  dom.toast.classList.remove('is-visible');
-  toastActionHandler = null;
-  toastTimer = setTimeout(() => {
-    dom.toast.hidden = true;
-  }, 250);
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,6 +304,7 @@ function syncFromRemote({ announce = false } = {}) {
       setSyncStatus('saved');
     }
     if (announce) showToast(`${pluralCards(state.cards.length)} geladen`, 'success');
+    syncWissen(); // Merker und eigene Einträge laufen unabhängig von den Karten
     return true;
   });
 }
@@ -475,6 +431,20 @@ function switchTab(tab) {
   Object.entries(dom.views).forEach(([name, view]) => {
     view.hidden = name !== tab;
   });
+  try {
+    localStorage.setItem(TAB_KEY, tab); // pro Gerät merken, wo man zuletzt war
+  } catch {
+    /* nur Komfort */
+  }
+}
+
+function restoreTab() {
+  try {
+    const tab = localStorage.getItem(TAB_KEY);
+    if (tab && dom.views[tab]) switchTab(tab);
+  } catch {
+    /* Standard: Üben */
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -831,8 +801,6 @@ function refreshAfterDataChange() {
 /* Einstellungen                                                       */
 /* ------------------------------------------------------------------ */
 
-let lastFocusBeforeModal = null;
-
 function openSettings() {
   const s = state.settings;
   dom.setUser.value = s.user;
@@ -843,17 +811,12 @@ function openSettings() {
   setSettingsMessage('');
   dom.settingsClear.hidden = !hasValidSettings(s);
 
-  lastFocusBeforeModal = document.activeElement;
-  dom.modal.hidden = false;
-  document.body.classList.add('modal-open');
   const firstEmpty = [dom.setUser, dom.setRepo, dom.setToken].find((input) => !input.value);
-  (firstEmpty || dom.settingsSave).focus();
+  openModal(dom.modal, firstEmpty || dom.settingsSave);
 }
 
 function closeSettings() {
-  dom.modal.hidden = true;
-  document.body.classList.remove('modal-open');
-  if (lastFocusBeforeModal && typeof lastFocusBeforeModal.focus === 'function') lastFocusBeforeModal.focus();
+  closeModal(dom.modal);
 }
 
 function setSettingsMessage(text, type = 'info') {
@@ -894,6 +857,7 @@ async function handleSettingsSubmit(event) {
   }
   persistLocally();
   refreshAfterDataChange();
+  reloadWissenForSettings();
 
   dom.settingsSave.disabled = true;
   setSettingsMessage('Verbinde mit GitHub …');
@@ -919,6 +883,7 @@ function handleSettingsClear() {
   resetDataState();
   exitEditMode();
   refreshAfterDataChange();
+  reloadWissenForSettings({ clear: true });
   setSyncStatus('unconfigured');
   openSettings();
   setSettingsMessage('Zugangsdaten und lokaler Zwischenspeicher wurden von diesem Gerät entfernt.', 'success');
@@ -933,8 +898,8 @@ function isTypingTarget(target) {
 }
 
 function handleKeydown(event) {
-  if (!dom.modal.hidden) {
-    if (event.key === 'Escape') closeSettings();
+  if (isAnyModalOpen()) {
+    if (event.key === 'Escape') closeTopModal();
     return;
   }
   if (state.tab !== 'practice' || dom.practiceArea.hidden || isTypingTarget(event.target)) return;
@@ -995,14 +960,12 @@ function bindEvents() {
   dom.settingsForm.addEventListener('submit', handleSettingsSubmit);
   dom.settingsClear.addEventListener('click', handleSettingsClear);
   dom.closeSettings.addEventListener('click', closeSettings);
-  dom.modal.addEventListener('click', (event) => {
-    if (event.target === dom.modal) closeSettings();
-  });
+  closeOnBackdropClick(dom.modal, closeSettings);
+  initToast();
 
-  dom.toastAction.addEventListener('click', () => {
-    const handler = toastActionHandler;
-    hideToast();
-    if (handler) handler();
+  // Links aus dem Nachschlagewerk (z. B. „Zum Thema“) holen den Tab „Wissen“ nach vorn
+  document.addEventListener('wissen:show', () => {
+    if (state.tab !== 'wissen') switchTab('wissen');
   });
 
   document.addEventListener('keydown', handleKeydown);
@@ -1019,6 +982,8 @@ function bindEvents() {
 
 function init() {
   bindEvents();
+  initWissen({ getSettings: () => state.settings });
+  restoreTab();
   restoreFromCache();
   state.lastRemoteIds = state.cards.filter((card) => !state.pending.has(card.id)).map((card) => card.id);
   renderSubjects();

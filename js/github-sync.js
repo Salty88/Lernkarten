@@ -14,6 +14,7 @@ const API_BASE = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
 const SETTINGS_KEY = 'lernkartei.settings';
 const CACHE_KEY = 'lernkartei.cache';
+const LEGACY_SETTINGS_KEY = 'lernkartei_settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   user: '',
@@ -83,7 +84,8 @@ export function normalizeSettings(settings) {
 }
 
 export function loadSettings() {
-  const stored = readJson(SETTINGS_KEY);
+  // Fallback: Einstellungen der Einzeldatei-Version übernehmen, damit niemand neu verbinden muss
+  const stored = readJson(SETTINGS_KEY) || readJson(LEGACY_SETTINGS_KEY);
   return normalizeSettings(stored && typeof stored === 'object' ? stored : {});
 }
 
@@ -98,6 +100,7 @@ export function saveSettings(settings) {
 
 export function clearSettings() {
   removeKey(SETTINGS_KEY);
+  removeKey(LEGACY_SETTINGS_KEY);
   removeKey(CACHE_KEY);
 }
 
@@ -168,9 +171,9 @@ function repoUrl(settings) {
   return `${API_BASE}/repos/${encodeURIComponent(settings.user)}/${encodeURIComponent(settings.repo)}`;
 }
 
-function contentsUrl(settings) {
-  const path = settings.path.split('/').map(encodeURIComponent).join('/');
-  return `${repoUrl(settings)}/contents/${path}`;
+function contentsUrl(settings, path = settings.path) {
+  const encoded = path.split('/').map(encodeURIComponent).join('/');
+  return `${repoUrl(settings)}/contents/${encoded}`;
 }
 
 /** fetch ohne Browser-Cache; Netzwerkfehler werden in SyncError übersetzt. */
@@ -324,4 +327,95 @@ export async function saveCards(settings, cards, sha, message) {
     throw new SyncError('conflict', 'Die Datei wurde zwischenzeitlich auf einem anderen Gerät geändert.', res.status);
   }
   throw await errorFromResponse(res);
+}
+
+/* ------------------------------------------------------------------ */
+/* Allgemeine Dateizugriffe (Merker, eigene Einträge, Bilder)          */
+/* ------------------------------------------------------------------ */
+
+/** Ordner, in dem die Kartendatei liegt; alle weiteren Daten liegen daneben. */
+export function dataDir(settings) {
+  const i = settings.path.lastIndexOf('/');
+  return i >= 0 ? settings.path.slice(0, i + 1) : '';
+}
+
+function refQuery(settings) {
+  return `?ref=${encodeURIComponent(settings.branch)}`;
+}
+
+/**
+ * Liest eine Textdatei. Fehlt sie, kommt { text: null, sha: null } zurück.
+ * Dateien über 1 MB liefert die Contents-API ohne Inhalt; dann wird roh nachgeladen.
+ */
+export async function getTextFile(settings, path) {
+  const url = contentsUrl(settings, path) + refQuery(settings);
+  const res = await request(url, { headers: buildHeaders(settings.token) });
+  if (res.status === 404) return { text: null, sha: null };
+  if (!res.ok) throw await errorFromResponse(res);
+
+  const data = await res.json();
+  if (Array.isArray(data) || data.type !== 'file') {
+    throw new SyncError('invalid', `„${path}“ ist keine Datei.`);
+  }
+  if (data.encoding === 'base64') return { text: decodeBase64Utf8(data.content || ''), sha: data.sha };
+
+  const raw = await request(url, {
+    headers: { ...buildHeaders(settings.token), Accept: 'application/vnd.github.raw+json' },
+  });
+  if (!raw.ok) throw await errorFromResponse(raw);
+  return { text: await raw.text(), sha: data.sha };
+}
+
+/** Schreibt Base64-Inhalt; wirft SyncError "conflict", wenn ein anderes Gerät schneller war. */
+export async function putBase64File(settings, path, base64, sha, message) {
+  const body = { message, content: base64, branch: settings.branch };
+  if (sha) body.sha = sha;
+  const res = await request(contentsUrl(settings, path), {
+    method: 'PUT',
+    headers: buildHeaders(settings.token, true),
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return (await res.json()).content.sha;
+  if (res.status === 409 || (res.status === 422 && !sha)) {
+    throw new SyncError('conflict', 'Die Datei wurde zwischenzeitlich auf einem anderen Gerät geändert.', res.status);
+  }
+  throw await errorFromResponse(res);
+}
+
+export function putTextFile(settings, path, text, sha, message) {
+  return putBase64File(settings, path, encodeBase64Utf8(text), sha, message);
+}
+
+/** Löscht eine Datei; fehlt sie bereits, passiert nichts. */
+export async function deleteFile(settings, path, message) {
+  const info = await request(contentsUrl(settings, path) + refQuery(settings), { headers: buildHeaders(settings.token) });
+  if (info.status === 404) return;
+  if (!info.ok) throw await errorFromResponse(info);
+  const { sha } = await info.json();
+  const res = await request(contentsUrl(settings, path), {
+    method: 'DELETE',
+    headers: buildHeaders(settings.token, true),
+    body: JSON.stringify({ message, sha, branch: settings.branch }),
+  });
+  if (!res.ok && res.status !== 404) throw await errorFromResponse(res);
+}
+
+/** Listet einen Ordner: [{ name, path, sha, type }]. Fehlt der Ordner, kommt [] zurück. */
+export async function listDirectory(settings, dir) {
+  const clean = dir.replace(/\/+$/, '');
+  const res = await request(contentsUrl(settings, clean) + refQuery(settings), { headers: buildHeaders(settings.token) });
+  if (res.status === 404) return [];
+  if (!res.ok) throw await errorFromResponse(res);
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  return data.map(({ name, path, sha, type }) => ({ name, path, sha, type }));
+}
+
+/** Lädt eine Binärdatei (z. B. Bild) als Blob; funktioniert auch in privaten Repositorys. */
+export async function fetchRawBlob(settings, path, type = 'image/jpeg') {
+  const res = await request(contentsUrl(settings, path) + refQuery(settings), {
+    headers: { ...buildHeaders(settings.token), Accept: 'application/vnd.github.raw+json' },
+  });
+  if (!res.ok) throw await errorFromResponse(res);
+  return new Blob([await res.arrayBuffer()], { type });
 }

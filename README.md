@@ -5,7 +5,11 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 
 **Funktionen**
 
-- **Üben:** Karten als 3D-Flip-Karte, Filter nach Fach, Mischen, Bewertung mit „Nochmal“ oder „Gewusst“, Fortschrittsanzeige.
+- **Üben:**
+  - **Heute fällig** (Leitner-System): fällige Karten plus neue Karten bis zum Tageslimit, bewusst gemischt über Fächer und Themen. Richtig: ein Fach weiter (wieder fällig nach 1, 2, 4, 8, 16 Tagen). Falsch: zurück in Fach 1, morgen erneut und in der Sitzung am Ende noch einmal.
+  - **Freies Üben** mit Fach- und Themenfilter.
+  - **Übungsformen:** Multiple Choice (Begriff → Erklärung), Begriff erkennen (Erklärung → Begriff), Klassisch (umdrehen, selbst bewerten). „Gemischt“ wählt je nach Lernstand: neue Karten eher Multiple Choice, sichere eher klassisch. Falsche Antwortmöglichkeiten stammen aus demselben Thema.
+  - **Übungsplan:** neue Karten pro Tag und Karten pro Sitzung einstellbar (pro Gerät).
 - **Erstellen:** Karten anlegen, bearbeiten und löschen (mit „Rückgängig“ im Hinweis), Fach-Vorschläge, Filter und Zähler.
 - **Wissen (Nachschlagewerk):**
   - **Themen:** Merker je Fach mit Miniblöcken und den sechs Bezügen (Praxisbezug, Glossar, Prüfungsbezug, Managementsprache, Abschluss, Abweichungen).
@@ -24,7 +28,7 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 - **Tipps und Verweise beim Üben:** „💡 Tipp“ (Taste `T`) zeigt Thema und Schlüsselbegriffe, ohne die Antwort zu verraten. Auf der Rückseite sind Begriffe antippbar; darunter stehen Fundstelle („Im Wissen ansehen“) und verwandte Begriffe. Verlinkt wird nur innerhalb desselben Fachs, Abkürzungen gelten fachübergreifend.
 - **Fächer** werden zusammengefasst, auch Varianten wie „VWL - Rechtsformen“ oder „Rechnungswesen - ReWe“.
 - **Verknüpfte Lernkarten** zeigen immer den aktuellen Text aus dem Wissen. Wird eine solche Karte bearbeitet, wird sie zur „eigenen Fassung“ und behält ihren Text.
-- **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert. Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
+- **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert, Antworten beim Üben nach ca. 3 Sekunden in der kleinen Datei `lernstand.json` (nicht mehr in `cards.json`). Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
 - **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.
 - **Hell/Dunkel** wechselt automatisch mit der Systemeinstellung.
 - **Tastatur (Mac):** Leertaste dreht die Karte, `1` = Nochmal, `2` = Gewusst, `Cmd + Enter` speichert das Formular, `Esc` schließt Fenster.
@@ -37,6 +41,8 @@ css/style.css         Styling (Light/Dark über CSS-Variablen)
 js/app.js             Tabs, Üben, Karten-Formular und -Liste, Einstellungen
 js/wissen.js          Oberfläche des Nachschlagewerks (Themen, Register, Eigene, Suche, Import)
 js/luecken.js         Reiter „Lücken“: prüfen, Lernkarte erstellen oder verknüpfen, offene Lücken
+js/practice.js        Reiter „Üben“: Tagesauswahl, Mischen, Übungsformen, Tipps und Verweise
+js/progress.js        Lernstand (Leitner) in lernstand.json, konfliktsicher über mehrere Geräte
 js/wissen-data.js     Fächer, Laden und Prüfen der Merker, Begriffsverzeichnis, Verlinkung, Suche
 js/richtext.js        Textdarstellung: Absätze, Aufzählungen, fett, Herkunfts-Markierungen
 js/ui.js              Gemeinsame Bausteine: Elemente, Toasts, Dialoge
@@ -48,6 +54,7 @@ js/github-sync.js     GitHub-API, Base64/UTF-8, Einstellungen, lokaler Zwischens
 ```
 cards.json            Lernkarten (mit Nummer "nr" und optionaler Verknüpfung "quelle")
 lernstoff.json        Eigene Einträge im Nachschlagewerk
+lernstand.json        Lernstand je Karte (Fach, fällig am, richtig/falsch) und Tageszähler je Gerät
 merker/<id>.json      Ein Merker pro Datei (z. B. merker/rewe-1-externes-rechnungswesen.json)
 images/               Bilder der eigenen Einträge
 ```

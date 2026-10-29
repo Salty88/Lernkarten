@@ -32,15 +32,33 @@
   <main class="container">
     <!-- ============ Üben ============ -->
     <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
-      <div class="toolbar">
+      <div class="practice-top">
+        <div class="segmented" id="practice-mode" role="tablist" aria-label="Übungsart">
+          <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute fällig <span class="chip-count" id="due-count"></span></button>
+          <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Freies Üben</button>
+        </div>
+        <div class="toolbar-actions">
+          <label class="visually-hidden" for="practice-format">Übungsform</label>
+          <select class="select select-compact" id="practice-format">
+            <option value="gemischt">Gemischt</option>
+            <option value="mc">Multiple Choice</option>
+            <option value="klassisch">Klassisch</option>
+          </select>
+          <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
+        </div>
+      </div>
+
+      <div class="toolbar" id="free-toolbar" hidden>
         <label class="visually-hidden" for="practice-filter">Fach filtern</label>
         <select class="select" id="practice-filter"></select>
         <label class="visually-hidden" for="practice-theme">Thema filtern</label>
         <select class="select" id="practice-theme" hidden></select>
-        <div class="toolbar-actions">
-          <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
-          <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
-        </div>
+        <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
+      </div>
+
+      <div class="session-bar" id="session-bar" hidden>
+        <p class="session-text" id="session-text"></p>
+        <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
       </div>
 
       <div class="practice-area" id="practice-area">
@@ -64,25 +82,52 @@
           </div>
         </div>
 
+        <div class="mc" id="mc-area" hidden>
+          <div class="mc-question">
+            <span class="badge" id="mc-fach"></span>
+            <span class="face-label" id="mc-label"></span>
+            <p class="mc-prompt" id="mc-prompt"></p>
+          </div>
+          <div class="mc-options" id="mc-options"></div>
+          <p class="mc-feedback" id="mc-feedback" role="status" hidden></p>
+          <div class="mc-explain" id="mc-explain" hidden></div>
+        </div>
+
         <div class="practice-help">
           <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
           <div class="hint-box" id="hint-box" hidden></div>
           <div class="card-links" id="card-links" hidden></div>
         </div>
 
-        <div class="rate-buttons">
+        <div class="rate-buttons" id="rate-buttons">
           <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
           <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
         </div>
-        <p class="keyboard-hint">Leertaste: umdrehen · T: Tipp · 1: Nochmal · 2: Gewusst</p>
+        <button class="btn btn-primary mc-next" id="mc-next" type="button" hidden>Weiter ›</button>
+        <p class="keyboard-hint" id="keyboard-hint"></p>
       </div>
 
       <div class="empty-state" id="practice-empty" hidden>
         <span class="empty-icon" id="practice-empty-icon" aria-hidden="true"></span>
         <p class="empty-title" id="practice-empty-title"></p>
         <p class="empty-text" id="practice-empty-text"></p>
-        <button class="btn btn-primary" id="practice-empty-action" type="button" hidden></button>
+        <div class="form-actions empty-actions" id="practice-empty-actions"></div>
       </div>
+
+      <details class="panel plan" id="plan-settings">
+        <summary>Übungsplan</summary>
+        <p class="muted small">Leitner-System: Richtig beantwortete Karten wandern ein Fach weiter und kommen nach 1, 2, 4, 8 bzw. 16 Tagen wieder. Falsch beantwortete starten in Fach 1 und kommen morgen erneut, in der laufenden Sitzung zusätzlich am Ende. „Heute fällig“ mischt die Themen bewusst durch.</p>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Neue Karten pro Tag</span>
+            <input class="input" id="plan-new" type="number" min="0" max="200" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span class="field-label">Höchstens Karten pro Sitzung</span>
+            <input class="input" id="plan-max" type="number" min="5" max="300" inputmode="numeric">
+          </label>
+        </div>
+      </details>
     </section>
 
     <!-- ============ Erstellen ============ -->

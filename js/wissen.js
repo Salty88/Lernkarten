@@ -794,6 +794,7 @@ export function openSheet(target, { push = true } = {}) {
   body.scrollTop = 0;
 
   if (target.begriff !== undefined) renderTermSheet(target, body);
+  else if (target.eigen) renderEntrySheet(target, body);
   else renderAbbreviationSheet(target, body);
 
   if (sheet.hidden) openModal(sheet, $('term-close'));
@@ -829,6 +830,34 @@ function renderTermSheet(term, body) {
     }
     body.append(box);
   }
+}
+
+/** Eigener Eintrag im Begriff-Fenster (z. B. nach Antippen von „BA“ im Text). */
+function renderEntrySheet(item, body) {
+  const { entry } = item;
+  $('term-title').textContent = entry.titel;
+  const ctx = linkCtx({ fach: item.fach, selfId: item.id });
+  if (entry.stichworte.length) body.append(el('p', 'muted small', `Stichworte: ${entry.stichworte.join(', ')}`));
+  if (entry.erklaerung) {
+    const block = el('div', 'sheet-block');
+    block.append(el('span', 'sheet-label', 'Erklärung'), renderRich(entry.erklaerung, ctx));
+    body.append(block);
+  }
+  if (entry.verstaendnis) {
+    const block = el('div', 'sheet-block');
+    block.append(el('span', 'sheet-label', 'Verständnis aufbauen'), renderRich(entry.verstaendnis, ctx));
+    body.append(block);
+  }
+  const origin = el('div', 'sheet-origin');
+  origin.append(
+    el('span', 'sheet-label', 'Fundstelle'),
+    el('p', null, `Eigener Eintrag${entry.bilder.length ? ` · ${plural(entry.bilder.length, 'Bild', 'Bilder')}` : ''}`),
+    button('btn btn-small btn-primary', 'Eintrag öffnen ›', () => {
+      document.dispatchEvent(new CustomEvent('wissen:show'));
+      openEntry(entry.id);
+    }),
+  );
+  body.append(origin, renderCardLink(`e:${entry.id}`, () => openSheet(item, { push: false })));
 }
 
 function renderAbbreviationSheet(abk, body) {
@@ -933,7 +962,7 @@ function renderEntry(entry) {
   details.append(summary);
 
   const body = el('div', 'entry-body');
-  const ctx = linkCtx({ fach: fachKey(entry.fach) });
+  const ctx = linkCtx({ fach: fachKey(entry.fach), selfId: `e:${entry.id}` });
   if (entry.erklaerung) body.append(el('h4', 'entry-label', 'Erklärung'), renderRich(entry.erklaerung, ctx));
   if (entry.verstaendnis) body.append(el('h4', 'entry-label', 'Verständnis aufbauen'), renderRich(entry.verstaendnis, ctx));
   if (isDraft(entry)) body.append(el('p', 'muted', 'Entwurf: Erklärung noch offen.'));

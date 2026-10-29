@@ -21,6 +21,8 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
   - Nichts vorhanden: Wissenseintrag und verknüpfte Lernkarte anlegen; ohne Erklärung bleibt es eine offene Lücke.
   - Fehlende Lernkarten zu vorhandenem Wissen lassen sich mit einem Tipp erzeugen.
 - **Lernkarten-Nummern:** Jede Karte hat eine fortlaufende, eindeutige Nummer (#0001, #0002, …). Legen zwei Geräte offline gleichzeitig Karten an, bekommt beim Zusammenführen die später gespeicherte Karte die nächste freie Nummer.
+- **Tipps und Verweise beim Üben:** „💡 Tipp“ (Taste `T`) zeigt Thema und Schlüsselbegriffe, ohne die Antwort zu verraten. Auf der Rückseite sind Begriffe antippbar; darunter stehen Fundstelle („Im Wissen ansehen“) und verwandte Begriffe. Verlinkt wird nur innerhalb desselben Fachs, Abkürzungen gelten fachübergreifend.
+- **Fächer** werden zusammengefasst, auch Varianten wie „VWL - Rechtsformen“ oder „Rechnungswesen - ReWe“.
 - **Verknüpfte Lernkarten** zeigen immer den aktuellen Text aus dem Wissen. Wird eine solche Karte bearbeitet, wird sie zur „eigenen Fassung“ und behält ihren Text.
 - **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert. Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
 - **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.

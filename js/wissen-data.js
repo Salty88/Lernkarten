@@ -43,7 +43,14 @@ for (const fach of FAECHER) {
 
 /** Ordnet eine Fach-Angabe (ID, Kürzel oder Freitext) einem der sieben Fächer zu, sonst null. */
 export function resolveFach(value) {
-  return FACH_BY_ALIAS.get(norm(value)) || null;
+  const exact = FACH_BY_ALIAS.get(norm(value));
+  if (exact) return exact;
+  // Varianten wie „VWL - Rechtsformen“ oder „Rechnungswesen - ReWe“: erstes erkanntes Wort zählt
+  for (const word of String(value || '').split(/[^\p{L}\p{N}]+/u)) {
+    const fach = word && FACH_BY_ALIAS.get(norm(word));
+    if (fach) return fach;
+  }
+  return null;
 }
 
 /** Schlüssel für Filter: Fach-ID oder "x:<Freitext>" für unbekannte Fächer. */
@@ -422,6 +429,18 @@ function buildIndex() {
     }
   }
 
+  // Eigene Einträge (ohne Entwürfe) werden ebenfalls verlinkt: Titel, Kürzel in Klammern
+  // und Stichworte, die im Titel vorkommen (z. B. „Leerkosten“ in „Leerkosten und Nutzkosten“)
+  const entries = [];
+  for (const entry of store.eigene) {
+    if (!entry.titel || isDraft(entry)) continue;
+    const kuerzel = [...entry.titel.matchAll(/\(([A-ZÄÖÜ][A-Za-zÄÖÜäöü]{1,6})\)/g)]
+      .map((m) => m[1])
+      .filter((k) => (k.match(/[A-ZÄÖÜ]/g) || []).length >= 2);
+    const inTitle = entry.stichworte.filter((w) => !kuerzel.includes(w) && norm(entry.titel).includes(norm(w)));
+    entries.push({ id: `e:${entry.id}`, eigen: true, entry, titel: entry.titel, fach: fachKey(entry.fach), merker: null, keys: termKeys(entry.titel, inTitle), kuerzel });
+  }
+
   // Schlüssel → Kandidaten (mehrere bei gleichen Begriffen in verschiedenen Fächern)
   const byKey = new Map();
   const caseSensitive = new Map();
@@ -437,6 +456,13 @@ function buildIndex() {
   for (const abk of abbreviations) {
     if (!caseSensitive.has(abk.kurz)) add(caseSensitive, abk.kurz, abk);
   }
+  // Merker-Begriffe haben Vorrang; eigene Einträge kommen als weitere Kandidaten dazu
+  for (const item of entries) {
+    item.keys.forEach((k) => add(byKey, k, item));
+    item.kuerzel.forEach((k) => {
+      if (!caseSensitive.has(k)) add(caseSensitive, k, item);
+    });
+  }
 
   const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const allKeys = [...new Set([...byKey.keys(), ...caseSensitive.keys()])].sort((a, b) => b.length - a.length);
@@ -444,16 +470,21 @@ function buildIndex() {
     ? new RegExp(`(?<![\\p{L}\\p{N}])(${allKeys.map(escape).join('|')})${WORD_SUFFIX}(?![\\p{L}\\p{N}])`, 'giu')
     : null;
 
-  return { terms, abbreviations, byKey, caseSensitive, pattern };
+  return { terms, abbreviations, entries, byKey, caseSensitive, pattern };
 }
 
-/** Wählt bei mehreren Kandidaten den passendsten: gleicher Merker, dann gleiches Fach. */
+/**
+ * Wählt bei mehreren Kandidaten den passendsten: gleicher Merker, dann gleiches Fach.
+ * Begriffe werden nur innerhalb des Fachs verlinkt (gleiches Wort, andere Bedeutung:
+ * „Richtlinie“ ist in VWL ein EU-Rechtsakt, im Rechnungswesen eine Verwaltungsvorschrift).
+ * Abkürzungen wie HGB oder KLR sind eindeutig und gelten fachübergreifend.
+ */
 function pickCandidate(candidates, ctx) {
-  return (
-    candidates.find((c) => ctx.merkerId && c.merker.id === ctx.merkerId) ||
-    candidates.find((c) => ctx.fach && c.fach === ctx.fach) ||
-    candidates[0]
-  );
+  const sameMerker = candidates.find((c) => ctx.merkerId && c.merker && c.merker.id === ctx.merkerId);
+  if (sameMerker) return sameMerker;
+  if (!ctx.fach) return candidates[0];
+  const isAbbreviation = (c) => c.begriff === undefined && !c.eigen;
+  return candidates.find((c) => c.fach === ctx.fach) || candidates.find(isAbbreviation) || null;
 }
 
 /** Findet zu einem gefundenen Wort den Begriff bzw. das Kürzel. */
@@ -726,4 +757,59 @@ export function quelleGroup(quelle) {
   if (quelle.startsWith('e:')) return 'eigen';
   const m = quelle.match(/^[ma]:([^|]+)\|/);
   return m ? m[1] : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hilfen für Tipps und Verweise beim Üben                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Findet bekannte Begriffe, Kürzel und eigene Einträge in einem Text
+ * (z. B. in der Antwort einer Lernkarte), jeweils einmal.
+ */
+export function termsInText(text, ctx = {}) {
+  const index = store.index;
+  if (!index || !index.pattern || !text) return [];
+  const found = new Map();
+  index.pattern.lastIndex = 0;
+  for (let m = index.pattern.exec(text); m; m = index.pattern.exec(text)) {
+    const target = resolveMatch(index, m[1], ctx);
+    if (target && target.id !== ctx.selfId && !found.has(target.id)) found.set(target.id, target);
+  }
+  return [...found.values()];
+}
+
+/** Anzeigename eines Verlinkungsziels (Begriff, Kürzel oder eigener Eintrag). */
+export function targetName(target) {
+  if (target.begriff !== undefined) return target.begriff;
+  if (target.eigen) return target.titel;
+  return target.kurz;
+}
+
+/**
+ * Ziel im Wissen zu einer Karten-Quelle:
+ * { term } für Glossar-Begriffe, { abk } für Kürzel, { entry } für eigene Einträge,
+ * { merker, block } für Managementsprache, Musterantwort, Kernaussage usw.
+ */
+export function targetForQuelle(quelle) {
+  if (!quelle || !store.index) return null;
+  if (quelle.startsWith('e:')) {
+    const entry = store.eigene.find((e) => `e:${e.id}` === quelle);
+    return entry ? { entry, item: store.index.entries.find((i) => i.entry === entry) || null } : null;
+  }
+  if (quelle.startsWith('a:')) {
+    const abk = store.index.abbreviations.find((a) => `a:${a.merker.id}|${a.kurz}` === quelle);
+    return abk ? { abk } : null;
+  }
+  const m = quelle.match(/^m:([^|]+)\|([^|]+)\|(\w)\|(.*)$/);
+  if (!m) return null;
+  const [, merkerId, blockId, typ, key] = m;
+  const merker = store.merker.find((x) => x.id === merkerId);
+  const block = merker && merker.bloecke.find((b) => b.id === blockId);
+  if (!block) return null;
+  if (typ === 'b') {
+    const term = store.index.terms.find((t) => t.block === block && t.begriff === key);
+    if (term) return { term, merker, block };
+  }
+  return { merker, block };
 }

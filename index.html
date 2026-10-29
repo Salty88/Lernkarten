@@ -58,17 +58,23 @@
               <div class="flashcard-face flashcard-back" id="card-back" aria-hidden="true">
                 <span class="badge badge-on-accent" id="card-fach-back"></span>
                 <span class="face-label">Antwort</span>
-                <p class="face-text" id="card-answer"></p>
+                <div class="face-text face-rich" id="card-answer"></div>
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="practice-help">
+          <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
+          <div class="hint-box" id="hint-box" hidden></div>
+          <div class="card-links" id="card-links" hidden></div>
         </div>
 
         <div class="rate-buttons">
           <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
           <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
         </div>
-        <p class="keyboard-hint">Leertaste: umdrehen · 1: Nochmal · 2: Gewusst</p>
+        <p class="keyboard-hint">Leertaste: umdrehen · T: Tipp · 1: Nochmal · 2: Gewusst</p>
       </div>
 
       <div class="empty-state" id="practice-empty" hidden>

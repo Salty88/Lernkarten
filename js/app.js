@@ -20,8 +20,22 @@ import {
   saveCards,
 } from './github-sync.js';
 import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
-import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
-import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards, merkerTitle, quelleGroup } from './wissen-data.js';
+import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge, openSheet, openMerker, openEntry } from './wissen.js';
+import {
+  FAECHER,
+  fachKey,
+  fachLabel,
+  fachName,
+  wissenCard,
+  allWissenCards,
+  merkerTitle,
+  quelleGroup,
+  createLinker,
+  termsInText,
+  targetName,
+  targetForQuelle,
+} from './wissen-data.js';
+import { renderRich } from './richtext.js';
 import { initLuecken, renderLuecken } from './luecken.js';
 
 const SAVE_DELAY_MS = 1200;
@@ -104,6 +118,9 @@ const dom = {
   cardQuestion: $('card-question'),
   cardAnswer: $('card-answer'),
   rateAgain: $('rate-again'),
+  hintBtn: $('hint-btn'),
+  hintBox: $('hint-box'),
+  cardLinks: $('card-links'),
   rateKnown: $('rate-known'),
   practiceEmpty: $('practice-empty'),
   practiceEmptyIcon: $('practice-empty-icon'),
@@ -535,7 +552,8 @@ function fillSubjectSelect(select, subjects, current) {
   all.value = ALL_SUBJECTS;
   select.append(all);
   for (const subject of subjects) {
-    const option = el('option', null, fachName(subject));
+    const option = el('option', null, fachLabel(subject));
+    option.title = fachName(subject);
     option.value = subject;
     select.append(option);
   }
@@ -692,7 +710,12 @@ function showCard(card, animate) {
   dom.cardFachFront.textContent = card.fach;
   dom.cardFachBack.textContent = card.fach;
   dom.cardQuestion.textContent = view.frage;
-  dom.cardAnswer.textContent = view.antwort;
+  // Begriffe in der Antwort sind antippbar und öffnen die Erklärung
+  dom.cardAnswer.replaceChildren(renderRich(view.antwort, { linker: practiceLinker, linked: new Set(), ...linkContext(card) }));
+  dom.hintBox.hidden = true;
+  dom.hintBtn.hidden = false;
+  dom.hintBtn.setAttribute('aria-expanded', 'false');
+  dom.cardLinks.hidden = true;
   dom.cardFront.scrollTop = 0;
   dom.cardBack.scrollTop = 0;
   void inner.offsetWidth;
@@ -707,6 +730,11 @@ function showCard(card, animate) {
 
 function setFlipped(flipped) {
   state.practice.flipped = flipped;
+  const card = currentPracticeCard();
+  dom.hintBtn.hidden = flipped;
+  if (flipped) dom.hintBox.hidden = true;
+  if (flipped && card) renderCardLinks(card);
+  else dom.cardLinks.hidden = true;
   dom.flashcard.classList.toggle('is-flipped', flipped);
   dom.cardFront.setAttribute('aria-hidden', String(flipped));
   dom.cardBack.setAttribute('aria-hidden', String(!flipped));
@@ -716,6 +744,100 @@ function setFlipped(flipped) {
 function flipCard() {
   if (!currentPracticeCard()) return;
   setFlipped(!state.practice.flipped);
+}
+
+/* ---------- Tipps und Verweise ---------- */
+
+const practiceLinker = createLinker((target) => openSheet(target));
+const MAX_HINT_TERMS = 4;
+const MAX_LINK_TERMS = 8;
+
+/** Kontext für Verlinkung: eigener Begriff wird nicht auf sich selbst verlinkt. */
+function linkContext(card) {
+  const ziel = targetForQuelle(card.quelle);
+  return {
+    fach: fachKey(card.fach),
+    merkerId: ziel && ziel.merker ? ziel.merker.id : null,
+    selfId: ziel ? (ziel.term ? ziel.term.id : ziel.entry ? `e:${ziel.entry.id}` : null) : null,
+  };
+}
+
+/** Begriffe aus dem Wissen, die zur Karte passen (bei unverknüpften Karten auch aus der Frage). */
+function relatedTerms(card) {
+  const view = cardView(card);
+  const ctx = linkContext(card);
+  const text = card.quelle ? view.antwort : `${view.frage}\n${view.antwort}`;
+  return termsInText(text, ctx);
+}
+
+function chip(label, onClick) {
+  const node = el('button', 'chip chip-small', label);
+  node.type = 'button';
+  node.addEventListener('click', onClick);
+  return node;
+}
+
+/** Tipp: Thema und Schlüsselbegriffe, ohne die Antwort zu verraten. */
+function showHint() {
+  const card = currentPracticeCard();
+  if (!card || state.practice.flipped) return;
+  if (!dom.hintBox.hidden) {
+    dom.hintBox.hidden = true;
+    dom.hintBtn.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const view = cardView(card);
+  const ziel = targetForQuelle(card.quelle);
+  dom.hintBox.replaceChildren();
+  if (ziel && ziel.block) dom.hintBox.append(el('p', null, `Thema: ${ziel.block.id} · ${ziel.block.titel}`));
+  else if (ziel && ziel.entry) dom.hintBox.append(el('p', null, 'Aus deinen eigenen Einträgen'));
+
+  const ctx = linkContext(card);
+  const keyTerms = termsInText(view.antwort, ctx).slice(0, MAX_HINT_TERMS).map(targetName);
+  if (keyTerms.length) {
+    dom.hintBox.append(el('p', null, `Denk an: ${keyTerms.join(' · ')}`));
+  } else {
+    const words = view.antwort.split(/\s+/).filter(Boolean);
+    const start = words.slice(0, 3).join(' ');
+    if (start) dom.hintBox.append(el('p', null, `Beginnt mit: „${start}${words.length > 3 ? ' …' : ''}“`));
+  }
+  if (!dom.hintBox.childElementCount) dom.hintBox.append(el('p', null, 'Für diese Karte gibt es keinen Tipp.'));
+  dom.hintBox.hidden = false;
+  dom.hintBtn.setAttribute('aria-expanded', 'true');
+}
+
+function openZiel(ziel) {
+  if (ziel.term) openSheet(ziel.term);
+  else if (ziel.item) openSheet(ziel.item);
+  else if (ziel.entry) openEntry(ziel.entry.id);
+  else if (ziel.abk) openSheet(ziel.abk);
+  else if (ziel.block) openMerker(ziel.merker.id, ziel.block.id);
+}
+
+/** Nach dem Umdrehen: Fundstelle im Wissen und Verweise auf verwandte Begriffe. */
+function renderCardLinks(card) {
+  const view = cardView(card);
+  const ziel = targetForQuelle(card.quelle);
+  const terms = relatedTerms(card).slice(0, MAX_LINK_TERMS);
+  dom.cardLinks.replaceChildren();
+  if (ziel && view.pfad) {
+    const row = el('div', 'card-links-row');
+    row.append(el('span', 'card-links-label', '🔗 Fundstelle'), el('span', 'card-links-path', view.pfad));
+    const open = el('button', 'btn btn-small btn-secondary', 'Im Wissen ansehen ›');
+    open.type = 'button';
+    open.addEventListener('click', () => openZiel(ziel));
+    row.append(open);
+    dom.cardLinks.append(row);
+  }
+  if (terms.length) {
+    const row = el('div', 'card-links-row');
+    row.append(el('span', 'card-links-label', card.quelle ? 'Siehe auch' : 'Passt zu'));
+    const chips = el('div', 'chips');
+    terms.forEach((target) => chips.append(chip(targetName(target), () => openSheet(target))));
+    row.append(chips);
+    dom.cardLinks.append(row);
+  }
+  dom.cardLinks.hidden = !dom.cardLinks.childElementCount;
 }
 
 /** Bewertet die aktuelle Karte und zeigt die nächste. */
@@ -1105,6 +1227,9 @@ function handleKeydown(event) {
   if ((event.key === ' ' || event.key === 'Enter') && !onOtherControl) {
     event.preventDefault();
     flipCard();
+  } else if (event.key === 't' || event.key === 'T') {
+    event.preventDefault();
+    showHint();
   } else if (event.key === '1' || event.key === 'ArrowLeft') {
     event.preventDefault();
     rateCard(false);
@@ -1146,6 +1271,7 @@ function bindEvents() {
     else syncFromRemote({ announce: true });
   });
   dom.flashcard.addEventListener('click', flipCard);
+  dom.hintBtn.addEventListener('click', showHint);
   dom.rateAgain.addEventListener('click', () => rateCard(false));
   dom.rateKnown.addEventListener('click', () => rateCard(true));
 

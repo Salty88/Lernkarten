@@ -128,7 +128,6 @@ export async function syncWissen({ announce = false } = {}) {
   const settings = getSettings();
   if (!hasValidSettings(settings) || ws.syncing) return false;
   ws.syncing = true;
-  $('w-sync').disabled = true;
   try {
     const { fehler } = await loadWissen(settings);
     renderWissen();
@@ -143,7 +142,6 @@ export async function syncWissen({ announce = false } = {}) {
     return false;
   } finally {
     ws.syncing = false;
-    $('w-sync').disabled = false;
   }
 }
 
@@ -1360,7 +1358,6 @@ export function initWissen(options) {
       renderWissen();
     });
   });
-  $('w-sync').addEventListener('click', () => syncWissen({ announce: true }));
   $('w-import').addEventListener('click', openImport);
 
   // Begriff-Fenster

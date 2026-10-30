@@ -212,10 +212,12 @@ code {
 .bottom-nav .tab.is-active .tab-icon { filter: none; opacity: 1; }
 
 /* Sync-Zustand als Punkt am Eintrag „Mehr“ */
+.bottom-nav .tab { position: relative; }
+
 .sync-dot {
   position: absolute;
-  top: -1px;
-  right: -6px;
+  top: 5px;
+  left: calc(50% + 7px);
   width: 9px;
   height: 9px;
   border-radius: 50%;
@@ -2276,4 +2278,39 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 .chip.is-empty:not(.is-active) { opacity: 0.55; }
 @media (min-width: 700px) {
   .practice-fach { flex-wrap: wrap; overflow: visible; }
+}
+
+/* ---------- Neuer Look: Feinschliff (Etappe 1) ---------- */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  border: 0;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.panel,
+.empty-state,
+.block,
+.merker-card,
+.entry,
+.list-item,
+.reg-row {
+  border-color: var(--border);
+}
+
+.sync-dot[data-status="idle"] { display: none; }
+
+/* „Mehr“: Beschriftung behält ihren Platz; am Handy steht der Schalter darunter */
+.settings-text { flex: 1 1 auto; min-width: max-content; }
+.settings-row .segmented-small { flex-shrink: 0; margin-left: auto; }
+
+@media (max-width: 480px) {
+  .settings-row-wrap { flex-wrap: wrap; row-gap: 8px; }
+  .settings-row-wrap .segmented-small {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    flex: 1 0 calc(100% - 46px);
+    margin-left: 46px;
+  }
 }

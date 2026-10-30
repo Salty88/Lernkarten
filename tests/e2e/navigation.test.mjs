@@ -73,13 +73,21 @@ try {
     const ok = await page.evaluate(() => {
       const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
       const view = document.querySelector('.view:not([hidden])');
-      const items = [...view.querySelectorAll('*')].filter((n) => n.offsetParent !== null && n.getBoundingClientRect().height > 0);
+      // Inhalt zugeklappter <details> ist unsichtbar und zählt nicht
+      const hiddenInDetails = (n) => n.closest('details:not([open])') && !n.closest('summary');
+      const items = [...view.querySelectorAll('*')].filter((n) => n.offsetParent !== null && n.getBoundingClientRect().height > 0 && !hiddenInDetails(n));
       const lowest = Math.max(...items.map((n) => n.getBoundingClientRect().bottom));
       return { lowest, navTop: nav.top, width: document.documentElement.scrollWidth };
     });
     check(`Inhalt nicht verdeckt: ${tab}`, ok.lowest <= ok.navTop + 1, JSON.stringify(ok));
     check(`Kein seitliches Scrollen: ${tab}`, ok.width <= 390, String(ok.width));
   }
+  await page.click('#tab-mehr');
+  await page.click('#plan-settings > summary');
+  await page.evaluate(() => window.scrollTo(0, 1e6));
+  await page.waitForTimeout(150);
+  const planField = await page.evaluate(() => ({ field: document.getElementById('plan-max').getBoundingClientRect().bottom, navTop: document.querySelector('.bottom-nav').getBoundingClientRect().top }));
+  check('Aufgeklappter Übungsplan nicht verdeckt', planField.field <= planField.navTop, JSON.stringify(planField));
   check('Keine JavaScript-Fehler', app.errors.length === 0, app.errors.join('; '));
 } catch (e) {
   check('Test lief ohne Abbruch', false, e.message.split('\n')[0]);

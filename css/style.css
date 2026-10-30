@@ -2302,7 +2302,11 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 .sync-dot[data-status="idle"] { display: none; }
 
 /* „Mehr“: Beschriftung behält ihren Platz; am Handy steht der Schalter darunter */
-.settings-text { flex: 1 1 auto; min-width: max-content; }
+/* Überschrift einer Zeile wird nie gekürzt; Statustexte darunter dürfen umbrechen */
+.settings-text { flex: 1 1 auto; min-width: 0; }
+.settings-label { white-space: nowrap; }
+.settings-sub { overflow-wrap: anywhere; }
+.settings-row > .btn { flex-shrink: 0; }
 .settings-row .segmented-small { flex-shrink: 0; margin-left: auto; }
 
 @media (max-width: 480px) {

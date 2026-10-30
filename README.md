@@ -32,7 +32,8 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 - **Lernstand pro Person:** Karten, Wissen und Lücken sind gemeinsam; der Lernstand liegt je Person in `lernstand/<name>.json`. Der Name kommt aus dem Feld „Name (wer lernt)“ in den Einstellungen (z. B. Andy, Julian); bleibt es leer, gilt der GitHub-Name des Tokens. Die Trennung ist eine Absprache, kein Zugriffsschutz. Im Feld „Repository-Besitzer“ tragen alle den Besitzer des gemeinsamen Daten-Repositorys ein.
 - **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert, Antworten beim Üben nach ca. 3 Sekunden in der kleinen Lernstand-Datei der Person (nicht mehr in `cards.json`). Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
 - **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.
-- **Hell/Dunkel** wechselt automatisch mit der Systemeinstellung.
+- **Bedienung am Handy:** Navigation am unteren Rand (Üben · Erstellen · Wissen · Lücken · Mehr). Unter **Mehr** liegen Synchronisieren (mit Zeitangabe), Darstellung, Übungsform, Übungsplan, Merker importieren, „Lernstand von“ und die GitHub-Einstellungen. Ein Punkt am Symbol „Mehr“ zeigt den Speicherzustand: grün gespeichert, gelb speichert, rot Problem.
+- **Darstellung:** Hell, Dunkel oder Automatisch (folgt dem Gerät, auch während die App offen ist); die Wahl gilt pro Gerät.
 - **Tastatur (Mac):** Leertaste dreht die Karte, `1` = Nochmal, `2` = Gewusst, `Cmd + Enter` speichert das Formular, `Esc` schließt Fenster.
 
 ## Projektstruktur
@@ -40,7 +41,8 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 ```
 index.html            Markup
 css/style.css         Styling (Light/Dark über CSS-Variablen)
-js/app.js             Tabs, Üben, Karten-Formular und -Liste, Einstellungen
+js/app.js             Tabs, Karten-Formular und -Liste, Einstellungen, Sync-Anzeige
+js/theme.js           Darstellung Hell/Dunkel/Automatisch
 js/wissen.js          Oberfläche des Nachschlagewerks (Themen, Register, Eigene, Suche, Import)
 js/luecken.js         Reiter „Lücken“: prüfen, Lernkarte erstellen oder verknüpfen, offene Lücken
 js/practice.js        Reiter „Üben“: Tagesauswahl, Mischen, Übungsformen, Tipps und Verweise
@@ -91,6 +93,17 @@ images/               Bilder der eigenen Einträge
 ```
 
 Fach-IDs: `vwl-bwl`, `rewe`, `fi-inv`, `mpa`, `org`, `pm`, `ikt`. Herkunfts-Markierungen stehen direkt im Text, z. B. `(Folie 9)`, `[Gesetz: § 252 HGB]`, `[Ergänzung: IHK München]`, `[Nicht belegt: …]`, `[Fiktiv]`. `**fett**` wird fett dargestellt.
+
+## Tests
+
+Browser-Tests gegen ein simuliertes GitHub, siehe `tests/README.md`:
+
+```bash
+npm install
+npm run test:e2e
+```
+
+Die App selbst braucht keine Pakete; `package.json` dient nur den Tests.
 
 ## Einrichtung
 

@@ -95,6 +95,28 @@ try {
   await app.close();
 }
 
+// Langer Sync-Status (offline) am Handy: „Jetzt“ bleibt in der Zeile und antippbar
+app = await startApp();
+try {
+  await app.page.route('https://api.github.com/**', (route) => route.abort('internetdisconnected'));
+  await app.page.click('#tab-mehr');
+  await app.page.click('#sync-btn');
+  await app.page.waitForTimeout(800);
+  const status = await app.page.textContent('#sync-status');
+  const layout = await app.page.evaluate(() => {
+    const btn = document.getElementById('sync-btn').getBoundingClientRect();
+    const row = document.getElementById('sync-btn').parentElement.getBoundingClientRect();
+    const hit = document.elementFromPoint(btn.x + btn.width / 2, btn.y + btn.height / 2);
+    return { inRow: btn.right <= row.right + 1, hitsButton: hit && hit.id === 'sync-btn' };
+  });
+  check('Langer Status: „Jetzt“ bleibt in der Zeile', layout.inRow, `${status} ${JSON.stringify(layout)}`);
+  check('Langer Status: „Jetzt“ ist antippbar', layout.hitsButton, JSON.stringify(layout));
+} catch (e) {
+  check('Langer Status lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 // Review Focus 5: erster Start ohne Zugangsdaten
 app = await startApp({ settings: null, wait: 1500 });
 try {

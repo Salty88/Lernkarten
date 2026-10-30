@@ -23,6 +23,7 @@ import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyMo
 import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
 import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
 import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
+import { initTheme } from './theme.js';
 import {
   initProgress,
   restoreProgress,
@@ -971,6 +972,7 @@ function bindEvents() {
 }
 
 function init() {
+  initTheme();
   bindEvents();
   initWissen({ getSettings: () => state.settings });
   setCardBridge(cardBridge);

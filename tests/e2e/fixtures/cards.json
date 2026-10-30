@@ -1,0 +1,5 @@
+[
+  { "id": "k1", "nr": 1, "fach": "ReWe", "frage": "Was ist eine Bilanz?", "antwort": "Gegenüberstellung von Vermögen (Aktiva) und Kapital (Passiva) zum Stichtag.", "status": "neu", "wiederholungen": 0, "letzteUebung": null },
+  { "id": "k2", "nr": 2, "fach": "VWL", "frage": "Was bedeutet Inflation?", "antwort": "Anhaltender Anstieg des allgemeinen Preisniveaus.", "status": "neu", "wiederholungen": 0, "letzteUebung": null },
+  { "id": "k3", "nr": 3, "fach": "FiInv", "frage": "Was ist Liquidität?", "antwort": "Fähigkeit, Zahlungsverpflichtungen fristgerecht zu erfüllen.", "status": "neu", "wiederholungen": 0, "letzteUebung": null }
+]

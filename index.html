@@ -221,7 +221,7 @@
           <li>Verwende einen <strong>Fine-grained Personal Access Token</strong>, beschränkt auf genau dieses eine Repository, mit der Berechtigung <strong>„Contents: Read and write“</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Token erstellen ↗</a></li>
           <li>Der Token wird <strong>nur lokal im Browser dieses Geräts</strong> (localStorage) gespeichert und niemals ins Repository committed.</li>
           <li>Trage die Zugangsdaten <strong>auf jedem Gerät einmalig</strong> ein (Mac, iPad und Android). Alle lesen und schreiben denselben Datenbestand.</li>
-          <li><strong>Gemeinsam lernen:</strong> Karten, Wissen und Lücken sind für alle gleich. Der <strong>Lernstand ist pro Person getrennt</strong>; wer lernt, erkennt die App am eigenen Token. Beim Repository-Besitzer trägt jede Person den Besitzer des gemeinsamen Repositorys ein (nicht den eigenen Namen).</li>
+          <li><strong>Gemeinsam lernen:</strong> Karten, Wissen und Lücken sind für alle gleich. Der <strong>Lernstand ist pro Person getrennt</strong>: Jede Person trägt bei „Name (wer lernt)“ ihren eigenen Namen ein (leer: GitHub-Name des Tokens). Beim Repository-Besitzer tragen alle den Besitzer des gemeinsamen Repositorys ein.</li>
         </ul>
       </div>
 
@@ -236,6 +236,11 @@
             <input class="input" id="set-repo" type="text" required autocapitalize="off" spellcheck="false">
           </label>
         </div>
+        <label class="field">
+          <span class="field-label">Name (wer lernt)</span>
+          <input class="input" id="set-learner" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="z. B. Andy oder Julian">
+          <span class="field-hint">Unter diesem Namen wird dein Lernstand beim Üben gespeichert; jede Person trägt ihren eigenen Namen ein. Leer lassen: es gilt der GitHub-Name des Tokens. Karten, Wissen und Lücken bleiben für alle gemeinsam.</span>
+        </label>
         <div class="field-row">
           <label class="field">
             <span class="field-label">Branch</span>

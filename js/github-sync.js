@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   branch: 'main',
   path: 'cards.json',
   token: '',
+  learner: '',
 });
 
 /**
@@ -80,6 +81,7 @@ export function normalizeSettings(settings) {
     branch: String(s.branch).trim() || DEFAULT_SETTINGS.branch,
     path: String(s.path).trim().replace(/^\/+/, '') || DEFAULT_SETTINGS.path,
     token: String(s.token).trim(),
+    learner: String(s.learner || '').trim().slice(0, 40),
   };
 }
 

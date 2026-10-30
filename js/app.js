@@ -32,6 +32,7 @@ import {
   statusOf,
   clearProgressCache,
   currentLearner,
+  learnerFileName,
 } from './progress.js';
 import { initLuecken, renderLuecken } from './luecken.js';
 
@@ -112,6 +113,7 @@ const dom = {
   setBranch: $('set-branch'),
   setPath: $('set-path'),
   setToken: $('set-token'),
+  setLearner: $('set-learner'),
   settingsMessage: $('settings-message'),
   settingsSave: $('settings-save'),
   settingsClear: $('settings-clear'),
@@ -734,7 +736,7 @@ function refreshAfterDataChange() {
 function renderLearner() {
   const login = currentLearner();
   const text = login
-    ? `Lernstand von ${login} (Datei lernstand/${login.toLowerCase()}.json). Andere Personen haben ihren eigenen Lernstand.`
+    ? `Lernstand von ${login} (Datei lernstand/${learnerFileName()}.json). Andere Personen haben ihren eigenen Lernstand.`
     : 'Wessen Lernstand gilt, ermittelt die App nach dem Verbinden anhand des Tokens.';
   document.getElementById('plan-learner').textContent = text;
   document.getElementById('settings-learner').textContent = login ? `Angemeldet als ${login}. ${text}` : text;
@@ -799,6 +801,7 @@ function openSettings() {
   dom.setBranch.value = s.branch;
   dom.setPath.value = s.path;
   dom.setToken.value = s.token;
+  dom.setLearner.value = s.learner || '';
   setSettingsMessage('');
   dom.settingsClear.hidden = !hasValidSettings(s);
 
@@ -827,6 +830,7 @@ async function handleSettingsSubmit(event) {
       branch: dom.setBranch.value,
       path: dom.setPath.value,
       token: dom.setToken.value,
+      learner: dom.setLearner.value,
     });
   } catch (err) {
     setSettingsMessage(err.message, 'error');

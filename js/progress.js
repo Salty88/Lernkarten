@@ -2,8 +2,9 @@
  * progress.js
  *
  * Lernstand nach dem Leitner-System, getrennt von den Karten und pro Person:
- * lernstand/<github-name>.json. Wer lernt, ergibt sich aus dem Token (GitHub
- * meldet, wem er gehört). Karten, Wissen und Lücken bleiben gemeinsam.
+ * lernstand/<name>.json. Wer lernt, ist der in den Einstellungen eingetragene
+ * Name („Name (wer lernt)“), sonst der GitHub-Name des Tokens.
+ * Karten, Wissen und Lücken bleiben gemeinsam.
  *
  *  - Jede Karte liegt in Stufe 1 bis 5. Richtig: eine Stufe weiter, Pause 1, 2, 4, 8, 16 Tage.
  *    Falsch: zurück in Stufe 1, morgen wieder fällig.
@@ -72,7 +73,26 @@ async function ensureLogin(settings) {
   }
 }
 
-/** GitHub-Name der Person, deren Lernstand gerade gilt (oder null, solange unbekannt). */
+/** Dateiname aus dem Namen: Kleinbuchstaben, Umlaute ausgeschrieben, z. B. „Jürgen Müller“ → juergen-mueller. */
+function slugName(name) {
+  return String(name)
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'unbenannt';
+}
+
+/** Dateiname des aktuellen Lernstands ohne Endung (oder null, solange unbekannt). */
+export function learnerFileName() {
+  return ps.login ? slugName(ps.login) : null;
+}
+
+/** Name der Person, deren Lernstand gerade gilt (oder null, solange unbekannt). */
 export function currentLearner() {
   return ps.login;
 }
@@ -166,7 +186,7 @@ function serialize() {
 }
 
 function cacheTarget(settings) {
-  return `${settingsTarget(settings)}|${(ps.login || '').toLowerCase()}`;
+  return `${settingsTarget(settings)}|${ps.login ? slugName(ps.login) : ''}`;
 }
 
 function persist() {
@@ -199,7 +219,7 @@ export function restoreProgress() {
   ps.pending = new Set();
   ps.pendingDays = false;
   const settings = ps.getSettings();
-  ps.login = hasValidSettings(settings) ? cachedLogin(settings) : null;
+  ps.login = hasValidSettings(settings) ? settings.learner || cachedLogin(settings) : null;
   if (!hasValidSettings(settings) || !ps.login) return;
   mergeCache(settings);
 }
@@ -226,7 +246,7 @@ function mergeCache(settings) {
 
 /** Lernstand der lernenden Person, z. B. lernstand/salty88.json. */
 function filePath(settings) {
-  return `${dataDir(settings)}lernstand/${ps.login.toLowerCase()}.json`;
+  return `${dataDir(settings)}lernstand/${slugName(ps.login)}.json`;
 }
 
 /** Gemeinsame Datei der ersten Version (vor der Trennung nach Personen). */
@@ -256,7 +276,8 @@ export function loadProgress() {
     const settings = ps.getSettings();
     if (!hasValidSettings(settings)) return false;
     try {
-      const login = await ensureLogin(settings);
+      // Eingetragener Name hat Vorrang; sonst der GitHub-Name des Tokens
+      const login = settings.learner || (await ensureLogin(settings));
       if (ps.login && login !== ps.login) {
         // Anderer Token, andere Person: deren eigenen Stand verwenden
         restoreProgress();

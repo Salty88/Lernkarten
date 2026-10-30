@@ -48,9 +48,9 @@
         </div>
       </div>
 
+      <div class="chips chips-scroll practice-fach" id="practice-fach" role="toolbar" aria-label="Fach wählen"></div>
+
       <div class="toolbar" id="free-toolbar" hidden>
-        <label class="visually-hidden" for="practice-filter">Fach filtern</label>
-        <select class="select" id="practice-filter"></select>
         <label class="visually-hidden" for="practice-theme">Thema filtern</label>
         <select class="select" id="practice-theme" hidden></select>
         <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
@@ -116,7 +116,8 @@
 
       <details class="panel plan" id="plan-settings">
         <summary>Übungsplan</summary>
-        <p class="muted small">Leitner-System: Richtig beantwortete Karten wandern ein Fach weiter und kommen nach 1, 2, 4, 8 bzw. 16 Tagen wieder. Falsch beantwortete starten in Fach 1 und kommen morgen erneut, in der laufenden Sitzung zusätzlich am Ende. „Heute fällig“ mischt die Themen bewusst durch.</p>
+        <p class="muted small">Leitner-System: Richtig beantwortete Karten steigen eine Stufe auf und kommen nach 1, 2, 4, 8 bzw. 16 Tagen wieder. Falsch beantwortete starten in Stufe 1 und kommen morgen erneut, in der laufenden Sitzung zusätzlich am Ende. Wähle oben ein Fach als Schwerpunkt oder „Alle Fächer“; innerhalb der Auswahl werden die Themen bewusst gemischt.</p>
+        <p class="muted small" id="plan-learner"></p>
         <div class="field-row">
           <label class="field">
             <span class="field-label">Neue Karten pro Tag</span>
@@ -220,13 +221,14 @@
           <li>Verwende einen <strong>Fine-grained Personal Access Token</strong>, beschränkt auf genau dieses eine Repository, mit der Berechtigung <strong>„Contents: Read and write“</strong>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Token erstellen ↗</a></li>
           <li>Der Token wird <strong>nur lokal im Browser dieses Geräts</strong> (localStorage) gespeichert und niemals ins Repository committed.</li>
           <li>Trage die Zugangsdaten <strong>auf jedem Gerät einmalig</strong> ein (Mac, iPad und Android). Alle lesen und schreiben denselben Datenbestand.</li>
+          <li><strong>Gemeinsam lernen:</strong> Karten, Wissen und Lücken sind für alle gleich. Der <strong>Lernstand ist pro Person getrennt</strong>; wer lernt, erkennt die App am eigenen Token. Beim Repository-Besitzer trägt jede Person den Besitzer des gemeinsamen Repositorys ein (nicht den eigenen Namen).</li>
         </ul>
       </div>
 
       <form class="settings-form" id="settings-form" autocomplete="off">
         <div class="field-row">
           <label class="field">
-            <span class="field-label">GitHub-Benutzername</span>
+            <span class="field-label">Repository-Besitzer (GitHub-Benutzername)</span>
             <input class="input" id="set-user" type="text" required autocapitalize="off" spellcheck="false">
           </label>
           <label class="field">
@@ -249,6 +251,7 @@
           <input class="input" id="set-token" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
         </label>
 
+        <p class="muted small" id="settings-learner"></p>
         <p class="settings-message" id="settings-message" role="status" hidden></p>
 
         <div class="form-actions">

@@ -419,3 +419,16 @@ export async function fetchRawBlob(settings, path, type = 'image/jpeg') {
   if (!res.ok) throw await errorFromResponse(res);
   return new Blob([await res.arrayBuffer()], { type });
 }
+
+/**
+ * Liefert den GitHub-Benutzernamen, dem der Token gehört. Damit wird der
+ * Lernstand pro Person getrennt; das Feld „Benutzername“ in den Einstellungen
+ * bezeichnet dagegen den Besitzer des gemeinsamen Daten-Repositorys.
+ */
+export async function fetchLogin(settings) {
+  const res = await request(`${API_BASE}/user`, { headers: buildHeaders(settings.token) });
+  if (!res.ok) throw await errorFromResponse(res);
+  const data = await res.json();
+  if (!data || !data.login) throw new SyncError('invalid', 'GitHub hat keinen Benutzernamen geliefert.');
+  return String(data.login);
+}

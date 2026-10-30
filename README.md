@@ -6,8 +6,9 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 **Funktionen**
 
 - **Üben:**
-  - **Heute fällig** (Leitner-System): fällige Karten plus neue Karten bis zum Tageslimit, bewusst gemischt über Fächer und Themen. Richtig: ein Fach weiter (wieder fällig nach 1, 2, 4, 8, 16 Tagen). Falsch: zurück in Fach 1, morgen erneut und in der Sitzung am Ende noch einmal.
-  - **Freies Üben** mit Fach- und Themenfilter.
+  - **Fach als Schwerpunkt:** Leiste mit allen Fächern (VWL/BWL, ReWe, FiInv, MPA, OrgUF, PM, IKT) samt Anzahl; „Alle Fächer“ mischt. Das Fach steht bei jeder Karte und in der Fortschrittsleiste.
+  - **Heute fällig** (Leitner-System): fällige Karten plus neue Karten bis zum Tageslimit, innerhalb der Auswahl bewusst nach Themen gemischt. Richtig: eine Stufe weiter (wieder fällig nach 1, 2, 4, 8, 16 Tagen). Falsch: zurück in Stufe 1, morgen erneut und in der Sitzung am Ende noch einmal.
+  - **Freies Üben** mit zusätzlichem Themenfilter.
   - **Übungsformen:** Multiple Choice (Begriff → Erklärung), Begriff erkennen (Erklärung → Begriff), Klassisch (umdrehen, selbst bewerten). „Gemischt“ wählt je nach Lernstand: neue Karten eher Multiple Choice, sichere eher klassisch. Falsche Antwortmöglichkeiten stammen aus demselben Thema.
   - **Übungsplan:** neue Karten pro Tag und Karten pro Sitzung einstellbar (pro Gerät).
 - **Erstellen:** Karten anlegen, bearbeiten und löschen (mit „Rückgängig“ im Hinweis), Fach-Vorschläge, Filter und Zähler.
@@ -28,7 +29,8 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
 - **Tipps und Verweise beim Üben:** „💡 Tipp“ (Taste `T`) zeigt Thema und Schlüsselbegriffe, ohne die Antwort zu verraten. Auf der Rückseite sind Begriffe antippbar; darunter stehen Fundstelle („Im Wissen ansehen“) und verwandte Begriffe. Verlinkt wird nur innerhalb desselben Fachs, Abkürzungen gelten fachübergreifend.
 - **Fächer** werden zusammengefasst, auch Varianten wie „VWL - Rechtsformen“ oder „Rechnungswesen - ReWe“.
 - **Verknüpfte Lernkarten** zeigen immer den aktuellen Text aus dem Wissen. Wird eine solche Karte bearbeitet, wird sie zur „eigenen Fassung“ und behält ihren Text.
-- **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert, Antworten beim Üben nach ca. 3 Sekunden in der kleinen Datei `lernstand.json` (nicht mehr in `cards.json`). Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
+- **Lernstand pro Person:** Karten, Wissen und Lücken sind gemeinsam; der Lernstand liegt je Person in `lernstand/<github-name>.json`. Wer lernt, erkennt die App am Token. Im Feld „Repository-Besitzer“ tragen alle den Besitzer des gemeinsamen Daten-Repositorys ein.
+- **Sync:** Änderungen an Karten werden nach ca. 1,2 Sekunden automatisch gespeichert, Antworten beim Üben nach ca. 3 Sekunden in der kleinen Lernstand-Datei der Person (nicht mehr in `cards.json`). Hat ein anderes Gerät zwischenzeitlich gespeichert, wird zusammengeführt statt überschrieben.
 - **Offline-tolerant:** Der zuletzt geladene Stand von Karten und Wissen bleibt auf dem Gerät zwischengespeichert und ist ohne Verbindung lesbar.
 - **Hell/Dunkel** wechselt automatisch mit der Systemeinstellung.
 - **Tastatur (Mac):** Leertaste dreht die Karte, `1` = Nochmal, `2` = Gewusst, `Cmd + Enter` speichert das Formular, `Esc` schließt Fenster.
@@ -54,7 +56,8 @@ js/github-sync.js     GitHub-API, Base64/UTF-8, Einstellungen, lokaler Zwischens
 ```
 cards.json            Lernkarten (mit Nummer "nr" und optionaler Verknüpfung "quelle")
 lernstoff.json        Eigene Einträge im Nachschlagewerk
-lernstand.json        Lernstand je Karte (Fach, fällig am, richtig/falsch) und Tageszähler je Gerät
+lernstand/<name>.json Lernstand je Person: je Karte Stufe, fällig am, richtig/falsch; Tageszähler je Gerät
+lernstand.json        (alt) gemeinsamer Lernstand der ersten Version; wird beim Besitzer einmalig übernommen
 merker/<id>.json      Ein Merker pro Datei (z. B. merker/rewe-1-externes-rechnungswesen.json)
 images/               Bilder der eigenen Einträge
 ```

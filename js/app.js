@@ -23,7 +23,16 @@ import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyMo
 import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
 import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
 import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
-import { initProgress, restoreProgress, loadProgress, flushProgress, migrateFromCards, statusOf, clearProgressCache } from './progress.js';
+import {
+  initProgress,
+  restoreProgress,
+  loadProgress,
+  flushProgress,
+  migrateFromCards,
+  statusOf,
+  clearProgressCache,
+  currentLearner,
+} from './progress.js';
 import { initLuecken, renderLuecken } from './luecken.js';
 
 const SAVE_DELAY_MS = 1200;
@@ -718,6 +727,17 @@ function refreshAfterDataChange() {
   renderCardList();
   refreshPractice();
   renderLuecken();
+  renderLearner();
+}
+
+/** Zeigt, wessen Lernstand gerade gilt (pro Person getrennt). */
+function renderLearner() {
+  const login = currentLearner();
+  const text = login
+    ? `Lernstand von ${login} (Datei lernstand/${login.toLowerCase()}.json). Andere Personen haben ihren eigenen Lernstand.`
+    : 'Wessen Lernstand gilt, ermittelt die App nach dem Verbinden anhand des Tokens.';
+  document.getElementById('plan-learner').textContent = text;
+  document.getElementById('settings-learner').textContent = login ? `Angemeldet als ${login}. ${text}` : text;
 }
 
 /* ------------------------------------------------------------------ */
@@ -765,7 +785,6 @@ const practiceBridge = {
   isConfigured: () => hasValidSettings(state.settings),
   openSettings: () => openSettings(),
   switchTab: (tab) => switchTab(tab),
-  fillSubjectSelect: (select, current) => fillSubjectSelect(select, getSubjects(), current),
   onGraded: () => renderCardList(),
 };
 

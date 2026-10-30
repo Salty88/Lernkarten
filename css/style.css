@@ -2216,3 +2216,11 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
   .mc-prompt { font-size: 1.12rem; }
   .mc-prompt-long { font-size: 0.95rem; }
 }
+
+/* ---------- Üben: Fach-Schwerpunkt ---------- */
+
+.practice-fach { margin-bottom: 14px; }
+.chip.is-empty:not(.is-active) { opacity: 0.55; }
+@media (min-width: 700px) {
+  .practice-fach { flex-wrap: wrap; overflow: visible; }
+}

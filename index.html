@@ -4,31 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Lernkarten und Nachschlagewerk mit Synchronisation über GitHub">
-  <meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" id="theme-color" content="#f5f6fb">
   <meta name="color-scheme" content="light dark">
   <title>Lernkartei</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%82%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-early.js"></script>
   <link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <h1 class="brand"><span class="brand-icon" aria-hidden="true">🗂️</span><span class="brand-text">Lernkartei</span></h1>
-
-      <nav class="tabs" role="tablist" aria-label="Ansicht wählen">
-        <button class="tab is-active" id="tab-practice" type="button" role="tab" aria-selected="true" aria-controls="view-practice" data-tab="practice">Üben</button>
-        <button class="tab" id="tab-create" type="button" role="tab" aria-selected="false" aria-controls="view-create" data-tab="create">Erstellen</button>
-        <button class="tab" id="tab-wissen" type="button" role="tab" aria-selected="false" aria-controls="view-wissen" data-tab="wissen">Wissen</button>
-        <button class="tab" id="tab-luecken" type="button" role="tab" aria-selected="false" aria-controls="view-luecken" data-tab="luecken">Lücken</button>
-      </nav>
-
-      <button class="icon-btn" id="open-settings" type="button" aria-label="GitHub-Einstellungen" title="GitHub-Einstellungen">⚙︎</button>
-    </div>
-    <p class="sync-status" id="sync-status" aria-live="polite"></p>
-  </header>
-
   <main class="container">
     <!-- ============ Üben ============ -->
     <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
@@ -36,15 +20,6 @@
         <div class="segmented" id="practice-mode" role="tablist" aria-label="Übungsart">
           <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute fällig <span class="chip-count" id="due-count"></span></button>
           <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Freies Üben</button>
-        </div>
-        <div class="toolbar-actions">
-          <label class="visually-hidden" for="practice-format">Übungsform</label>
-          <select class="select select-compact" id="practice-format">
-            <option value="gemischt">Gemischt</option>
-            <option value="mc">Multiple Choice</option>
-            <option value="klassisch">Klassisch</option>
-          </select>
-          <button class="btn btn-secondary" id="sync-btn" type="button">⟳ Sync</button>
         </div>
       </div>
 
@@ -114,21 +89,6 @@
         <div class="form-actions empty-actions" id="practice-empty-actions"></div>
       </div>
 
-      <details class="panel plan" id="plan-settings">
-        <summary>Übungsplan</summary>
-        <p class="muted small">Leitner-System: Richtig beantwortete Karten steigen eine Stufe auf und kommen nach 1, 2, 4, 8 bzw. 16 Tagen wieder. Falsch beantwortete starten in Stufe 1 und kommen morgen erneut, in der laufenden Sitzung zusätzlich am Ende. Wähle oben ein Fach als Schwerpunkt oder „Alle Fächer“; innerhalb der Auswahl werden die Themen bewusst gemischt.</p>
-        <p class="muted small" id="plan-learner"></p>
-        <div class="field-row">
-          <label class="field">
-            <span class="field-label">Neue Karten pro Tag</span>
-            <input class="input" id="plan-new" type="number" min="0" max="200" inputmode="numeric">
-          </label>
-          <label class="field">
-            <span class="field-label">Höchstens Karten pro Sitzung</span>
-            <input class="input" id="plan-max" type="number" min="5" max="300" inputmode="numeric">
-          </label>
-        </div>
-      </details>
     </section>
 
     <!-- ============ Erstellen ============ -->
@@ -183,10 +143,6 @@
             <button class="seg" type="button" role="tab" aria-selected="false" data-mode="register">A–Z</button>
             <button class="seg" type="button" role="tab" aria-selected="false" data-mode="eigene">Eigene</button>
           </div>
-          <div class="wissen-actions">
-            <button class="btn btn-small btn-secondary" id="w-import" type="button">⤓ Import</button>
-            <button class="btn btn-small btn-secondary" id="w-sync" type="button">⟳ Sync</button>
-          </div>
         </div>
       </div>
       <div class="wissen-content" id="w-content"></div>
@@ -205,7 +161,83 @@
       <div class="gap-result" id="gap-result"></div>
       <div class="gap-overview" id="gap-overview"></div>
     </section>
+    <!-- ============ Mehr ============ -->
+    <section class="view" id="view-mehr" role="tabpanel" aria-labelledby="tab-mehr" hidden>
+      <h2 class="page-title">Mehr</h2>
+      <div class="panel settings-list">
+        <div class="settings-row">
+          <span class="settings-icon" aria-hidden="true">🔄</span>
+          <span class="settings-text">
+            <span class="settings-label">Synchronisieren</span>
+            <span class="settings-sub"><span class="sync-status" id="sync-status" aria-live="polite"></span> <span id="sync-time"></span></span>
+          </span>
+          <button class="btn btn-small btn-secondary" id="sync-btn" type="button">⟳ Jetzt</button>
+        </div>
+        <div class="settings-row settings-row-wrap">
+          <span class="settings-icon" aria-hidden="true">🌓</span>
+          <span class="settings-text"><span class="settings-label">Darstellung</span></span>
+          <div class="segmented segmented-small" role="group" aria-label="Darstellung">
+            <button class="seg" type="button" data-theme-choice="light" aria-pressed="false">Hell</button>
+            <button class="seg" type="button" data-theme-choice="dark" aria-pressed="false">Dunkel</button>
+            <button class="seg" type="button" data-theme-choice="auto" aria-pressed="false">Auto</button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-icon" aria-hidden="true">🎛️</span>
+          <label class="settings-text" for="practice-format"><span class="settings-label">Übungsform</span></label>
+          <select class="select select-compact" id="practice-format">
+            <option value="gemischt">Gemischt</option>
+            <option value="mc">Multiple Choice</option>
+            <option value="klassisch">Klassisch</option>
+          </select>
+        </div>
+        <details class="settings-details" id="plan-settings">
+          <summary class="settings-row">
+            <span class="settings-icon" aria-hidden="true">📅</span>
+            <span class="settings-text"><span class="settings-label">Übungsplan</span></span>
+            <span class="settings-value" aria-hidden="true">›</span>
+          </summary>
+          <div class="settings-body">
+            <p class="muted small">Leitner-System: Richtig beantwortete Karten steigen eine Stufe auf und kommen nach 1, 2, 4, 8 bzw. 16 Tagen wieder. Falsch beantwortete starten in Stufe 1 und kommen morgen erneut, in der laufenden Sitzung zusätzlich am Ende. Wähle beim Üben ein Fach als Schwerpunkt oder „Alle Fächer“; innerhalb der Auswahl werden die Themen bewusst gemischt.</p>
+            <p class="muted small" id="plan-learner"></p>
+            <div class="field-row">
+              <label class="field">
+                <span class="field-label">Neue Karten pro Tag</span>
+                <input class="input" id="plan-new" type="number" min="0" max="200" inputmode="numeric">
+              </label>
+              <label class="field">
+                <span class="field-label">Höchstens Karten pro Sitzung</span>
+                <input class="input" id="plan-max" type="number" min="5" max="300" inputmode="numeric">
+              </label>
+            </div>
+          </div>
+        </details>
+        <button class="settings-row settings-button" id="w-import" type="button">
+          <span class="settings-icon" aria-hidden="true">⤓</span>
+          <span class="settings-text"><span class="settings-label">Merker importieren</span></span>
+          <span class="settings-value" aria-hidden="true">›</span>
+        </button>
+        <div class="settings-row">
+          <span class="settings-icon" aria-hidden="true">👤</span>
+          <span class="settings-text"><span class="settings-label">Lernstand von</span><span class="settings-sub" id="mehr-learner"></span></span>
+        </div>
+        <button class="settings-row settings-button" id="open-settings" type="button">
+          <span class="settings-icon" aria-hidden="true">🔑</span>
+          <span class="settings-text"><span class="settings-label">GitHub-Einstellungen</span></span>
+          <span class="settings-value" aria-hidden="true">›</span>
+        </button>
+      </div>
+    </section>
   </main>
+
+  <!-- ============ Navigation unten ============ -->
+  <nav class="bottom-nav" role="tablist" aria-label="Ansicht wählen">
+    <button class="tab is-active" id="tab-practice" type="button" role="tab" aria-selected="true" aria-controls="view-practice" data-tab="practice"><span class="tab-icon" aria-hidden="true">🎯</span><span class="tab-label">Üben</span></button>
+    <button class="tab" id="tab-create" type="button" role="tab" aria-selected="false" aria-controls="view-create" data-tab="create"><span class="tab-icon" aria-hidden="true">✏️</span><span class="tab-label">Erstellen</span></button>
+    <button class="tab" id="tab-wissen" type="button" role="tab" aria-selected="false" aria-controls="view-wissen" data-tab="wissen"><span class="tab-icon" aria-hidden="true">📚</span><span class="tab-label">Wissen</span></button>
+    <button class="tab" id="tab-luecken" type="button" role="tab" aria-selected="false" aria-controls="view-luecken" data-tab="luecken"><span class="tab-icon" aria-hidden="true">🧩</span><span class="tab-label">Lücken</span></button>
+    <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="view-mehr" data-tab="mehr"><span class="tab-icon" aria-hidden="true">⚙️</span><span class="sync-dot" id="sync-dot" data-status="idle"></span><span class="tab-label">Mehr</span></button>
+  </nav>
 
   <!-- ============ Einstellungen ============ -->
   <div class="modal-backdrop" id="settings-modal" hidden>

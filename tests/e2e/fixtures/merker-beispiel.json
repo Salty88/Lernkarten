@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "rewe-beispiel",
+  "fach": "rewe",
+  "titel": "Beispiel-Merker Rechnungswesen",
+  "bloecke": [
+    {
+      "id": "A",
+      "titel": "Grundbegriffe",
+      "praxis": { "wann": "Beim Jahresabschluss.", "wofuer": "Begriffe trennen.", "warum": "Sonst falsche Entscheidungen.", "verknuepfung": "" },
+      "glossar": [
+        { "begriff": "Aufwand", "kurz": "Wertverzehr einer Periode.", "funktion": "Erfolgswirksam in der GuV." },
+        { "begriff": "Ertrag", "kurz": "Wertzuwachs einer Periode.", "funktion": "Beispiel Umsatzerlöse." },
+        { "begriff": "Auszahlung", "kurz": "Abfluss liquider Mittel.", "funktion": "Mindert den Kassenbestand." },
+        { "begriff": "Einzahlung", "kurz": "Zufluss liquider Mittel.", "funktion": "Erhöht den Kassenbestand." }
+      ],
+      "management": { "uebersetzungen": [{ "halle": "Das Geld ist da, also verdient.", "management": "Einzahlung ist nicht gleich Ertrag." }] },
+      "abschluss": { "kernaussage": "Zahlungs- und Erfolgsgrößen sind zu trennen." }
+    }
+  ]
+}

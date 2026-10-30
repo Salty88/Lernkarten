@@ -23,6 +23,7 @@ import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyMo
 import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
 import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
 import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
+import { initTheme, getThemeChoice, setThemeChoice } from './theme.js';
 import {
   initProgress,
   restoreProgress,
@@ -85,7 +86,15 @@ const $ = (id) => document.getElementById(id);
 
 const dom = {
   tabs: document.querySelectorAll('.tab'),
-  views: { practice: $('view-practice'), create: $('view-create'), wissen: $('view-wissen'), luecken: $('view-luecken') },
+  views: {
+    practice: $('view-practice'),
+    create: $('view-create'),
+    wissen: $('view-wissen'),
+    luecken: $('view-luecken'),
+    mehr: $('view-mehr'),
+  },
+  syncDot: $('sync-dot'),
+  syncTime: $('sync-time'),
   syncStatus: $('sync-status'),
   openSettings: $('open-settings'),
 
@@ -224,6 +233,12 @@ function setSyncStatus(status) {
   state.syncStatus = status;
   dom.syncStatus.textContent = STATUS_TEXT[status] || '';
   dom.syncStatus.dataset.status = status;
+  // Punkt am Eintrag „Mehr“ in der unteren Navigation
+  dom.syncDot.dataset.status = status;
+  dom.syncDot.title = STATUS_TEXT[status] || '';
+  if (status === 'saved') {
+    dom.syncTime.textContent = `· zuletzt ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+  }
   dom.syncBtn.disabled = status === 'loading' || status === 'saving';
 }
 
@@ -732,6 +747,15 @@ function refreshAfterDataChange() {
   renderLearner();
 }
 
+function renderThemeButtons() {
+  const choice = getThemeChoice();
+  document.querySelectorAll('[data-theme-choice]').forEach((button) => {
+    const active = button.dataset.themeChoice === choice;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
 /** Zeigt, wessen Lernstand gerade gilt (pro Person getrennt). */
 function renderLearner() {
   const login = currentLearner();
@@ -739,6 +763,7 @@ function renderLearner() {
     ? `Lernstand von ${login} (Datei lernstand/${learnerFileName()}.json). Andere Personen haben ihren eigenen Lernstand.`
     : 'Wessen Lernstand gilt, ermittelt die App nach dem Verbinden anhand des Tokens.';
   document.getElementById('plan-learner').textContent = text;
+  document.getElementById('mehr-learner').textContent = login || 'noch nicht verbunden';
   document.getElementById('settings-learner').textContent = login ? `Angemeldet als ${login}. ${text}` : text;
 }
 
@@ -944,6 +969,13 @@ function bindEvents() {
   });
   dom.cardList.addEventListener('click', handleListClick);
 
+  // Darstellung Hell / Dunkel / Auto (Seite „Mehr“)
+  document.querySelectorAll('[data-theme-choice]').forEach((button) => {
+    button.addEventListener('click', () => setThemeChoice(button.dataset.themeChoice));
+  });
+  document.addEventListener('theme:changed', renderThemeButtons);
+  renderThemeButtons();
+
   dom.settingsForm.addEventListener('submit', handleSettingsSubmit);
   dom.settingsClear.addEventListener('click', handleSettingsClear);
   dom.closeSettings.addEventListener('click', closeSettings);
@@ -971,6 +1003,7 @@ function bindEvents() {
 }
 
 function init() {
+  initTheme();
   bindEvents();
   initWissen({ getSettings: () => state.settings });
   setCardBridge(cardBridge);

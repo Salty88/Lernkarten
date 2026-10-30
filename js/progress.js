@@ -1,27 +1,30 @@
 /**
  * progress.js
  *
- * Lernstand nach dem Leitner-System, gespeichert getrennt von den Karten in
- * lernstand.json. Eine Bewertung lädt so nur noch den kleinen Lernstand hoch.
+ * Lernstand nach dem Leitner-System, getrennt von den Karten und pro Person:
+ * lernstand/<github-name>.json. Wer lernt, ergibt sich aus dem Token (GitHub
+ * meldet, wem er gehört). Karten, Wissen und Lücken bleiben gemeinsam.
  *
- *  - Jede Karte liegt in Fach 1 bis 5. Richtig: ein Fach weiter, Pause 1, 2, 4, 8, 16 Tage.
- *    Falsch: zurück in Fach 1, morgen wieder fällig.
+ *  - Jede Karte liegt in Stufe 1 bis 5. Richtig: eine Stufe weiter, Pause 1, 2, 4, 8, 16 Tage.
+ *    Falsch: zurück in Stufe 1, morgen wieder fällig.
  *  - Mehrere Geräte: pro Karte gilt der neueste Stand (Zeitstempel), nichts wird überschrieben.
  *  - Tagesstatistik pro Gerät, damit sich parallele Zähler nicht gegenseitig überschreiben.
  */
 
-import { SyncError, hasValidSettings, settingsTarget, dataDir, getTextFile, putTextFile } from './github-sync.js';
+import { SyncError, hasValidSettings, settingsTarget, dataDir, getTextFile, putTextFile, fetchLogin } from './github-sync.js';
 import { showToast } from './ui.js';
 
 const CACHE_KEY = 'lernkartei.lernstand';
 const DEVICE_KEY = 'lernkartei.geraet';
+const LOGIN_KEY = 'lernkartei.anmeldung';
 const SAVE_DELAY_MS = 3000;
 export const MAX_BOX = 5;
-/** Pause in Tagen je Fach (Index = Fach). */
+/** Pause in Tagen je Stufe (Index = Stufe). */
 export const BOX_DAYS = [0, 1, 2, 4, 8, 16];
 
 const ps = {
-  entries: new Map(), // Karten-ID → { b: Fach, f: fällig (JJJJ-MM-TT), z: zuletzt (ISO), r: richtig, w: falsch }
+  entries: new Map(), // Karten-ID → { b: Stufe, f: fällig (JJJJ-MM-TT), z: zuletzt (ISO), r: richtig, w: falsch }
+  login: null, // GitHub-Name der Person, die gerade lernt
   days: {}, // Datum → Geräte-ID → { neu, richtig, falsch }
   sha: null,
   remoteExists: false,
@@ -35,6 +38,49 @@ const ps = {
   failNotified: false,
   revision: 0, // steigt bei jedem Laden von GitHub
 };
+
+/* ------------------------------------------------------------------ */
+/* Wer lernt?                                                          */
+/* ------------------------------------------------------------------ */
+
+const tokenTail = (settings) => String(settings.token || '').slice(-8);
+
+/** Zuletzt ermittelter Name für diesen Token (damit es auch offline funktioniert). */
+function cachedLogin(settings) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOGIN_KEY) || 'null');
+    return saved && saved.tail === tokenTail(settings) ? saved.login : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ermittelt die lernende Person über den Token; offline gilt der zuletzt bekannte Name. */
+async function ensureLogin(settings) {
+  try {
+    const login = await fetchLogin(settings);
+    try {
+      localStorage.setItem(LOGIN_KEY, JSON.stringify({ tail: tokenTail(settings), login }));
+    } catch {
+      /* nur Komfort */
+    }
+    return login;
+  } catch (err) {
+    const cached = cachedLogin(settings);
+    if (cached) return cached;
+    throw err;
+  }
+}
+
+/** GitHub-Name der Person, deren Lernstand gerade gilt (oder null, solange unbekannt). */
+export function currentLearner() {
+  return ps.login;
+}
+
+/** Ist die lernende Person auch Besitzer des Daten-Repositorys? */
+function isOwner(settings) {
+  return Boolean(ps.login) && ps.login.toLowerCase() === String(settings.user).toLowerCase();
+}
 
 /** Zähler, der sich ändert, sobald ein neuer Stand von GitHub geladen wurde. */
 export function progressRevision() {
@@ -119,14 +165,18 @@ function serialize() {
   return { version: 1, karten: Object.fromEntries(ps.entries), tage };
 }
 
+function cacheTarget(settings) {
+  return `${settingsTarget(settings)}|${(ps.login || '').toLowerCase()}`;
+}
+
 function persist() {
   const settings = ps.getSettings();
-  if (!hasValidSettings(settings)) return;
+  if (!hasValidSettings(settings) || !ps.login) return;
   try {
     localStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        target: settingsTarget(settings),
+        target: cacheTarget(settings),
         ...serialize(),
         sha: ps.sha,
         remoteExists: ps.remoteExists,
@@ -149,16 +199,22 @@ export function restoreProgress() {
   ps.pending = new Set();
   ps.pendingDays = false;
   const settings = ps.getSettings();
-  if (!hasValidSettings(settings)) return;
+  ps.login = hasValidSettings(settings) ? cachedLogin(settings) : null;
+  if (!hasValidSettings(settings) || !ps.login) return;
+  mergeCache(settings);
+}
+
+/** Legt den gespeicherten Stand dieser Person auf dem Gerät über den aktuellen. */
+function mergeCache(settings) {
   try {
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (!cache || cache.target !== settingsTarget(settings)) return;
+    if (!cache || cache.target !== cacheTarget(settings)) return;
     mergeEntries(cache.karten);
     mergeDays(cache.tage);
-    ps.sha = cache.sha || null;
-    ps.remoteExists = Boolean(cache.remoteExists);
-    ps.pending = new Set(Array.isArray(cache.pending) ? cache.pending : []);
-    ps.pendingDays = Boolean(cache.pendingDays);
+    ps.sha = cache.sha || ps.sha;
+    ps.remoteExists = ps.remoteExists || Boolean(cache.remoteExists);
+    for (const id of Array.isArray(cache.pending) ? cache.pending : []) ps.pending.add(id);
+    ps.pendingDays = ps.pendingDays || Boolean(cache.pendingDays);
   } catch {
     /* defekter Zwischenspeicher: neu laden */
   }
@@ -168,7 +224,13 @@ export function restoreProgress() {
 /* Laden und Speichern                                                 */
 /* ------------------------------------------------------------------ */
 
+/** Lernstand der lernenden Person, z. B. lernstand/salty88.json. */
 function filePath(settings) {
+  return `${dataDir(settings)}lernstand/${ps.login.toLowerCase()}.json`;
+}
+
+/** Gemeinsame Datei der ersten Version (vor der Trennung nach Personen). */
+function legacyPath(settings) {
   return `${dataDir(settings)}lernstand.json`;
 }
 
@@ -194,12 +256,34 @@ export function loadProgress() {
     const settings = ps.getSettings();
     if (!hasValidSettings(settings)) return false;
     try {
+      const login = await ensureLogin(settings);
+      if (ps.login && login !== ps.login) {
+        // Anderer Token, andere Person: deren eigenen Stand verwenden
+        restoreProgress();
+      }
+      if (!ps.login) {
+        // Erster Start: bereits gegebene Antworten behalten und mit dem Gerätestand zusammenführen
+        ps.login = login;
+        mergeCache(settings);
+      }
       const { text, sha } = await getTextFile(settings, filePath(settings));
       const remote = parseRemote(text);
       mergeEntries(remote.karten);
       mergeDays(remote.tage);
       ps.sha = sha;
       ps.remoteExists = text !== null;
+      // Erste Version hatte einen gemeinsamen Lernstand: der gehört dem Repository-Besitzer
+      if (text === null && isOwner(settings)) {
+        const legacy = await getTextFile(settings, legacyPath(settings));
+        if (legacy.text !== null) {
+          const old = parseRemote(legacy.text);
+          mergeEntries(old.karten);
+          mergeDays(old.tage);
+          ps.pending = new Set(ps.entries.keys());
+          ps.pendingDays = true;
+          ps.remoteExists = true; // keine zusätzliche Übernahme aus cards.json
+        }
+      }
       ps.loaded = true;
       ps.revision += 1;
       persist();
@@ -233,7 +317,7 @@ export function flushProgress() {
 function saveProgress() {
   return runExclusive(async () => {
     const settings = ps.getSettings();
-    if (!hasValidSettings(settings) || (!ps.pending.size && !ps.pendingDays)) return;
+    if (!hasValidSettings(settings) || !ps.login || (!ps.pending.size && !ps.pendingDays)) return;
     const saving = new Set(ps.pending);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -242,7 +326,7 @@ function saveProgress() {
         mergeEntries(remote.karten);
         mergeDays(remote.tage);
         const body = `${JSON.stringify(serialize())}\n`;
-        ps.sha = await putTextFile(settings, filePath(settings), body, sha, `Lernstand: ${saving.size} ${saving.size === 1 ? 'Bewertung' : 'Bewertungen'}`);
+        ps.sha = await putTextFile(settings, filePath(settings), body, sha, `Lernstand ${ps.login}: ${saving.size} ${saving.size === 1 ? 'Bewertung' : 'Bewertungen'}`);
         ps.remoteExists = true;
         ps.loaded = true;
         for (const id of saving) ps.pending.delete(id);
@@ -285,7 +369,7 @@ export function isDue(id, day = today()) {
   return Boolean(entry && entry.f <= day);
 }
 
-/** Neu, Lernen (Fach 1 bis 2) oder Gelernt (ab Fach 3). */
+/** Neu, Lernen (Stufe 1 bis 2) oder Gelernt (ab Stufe 3). */
 export function statusOf(id) {
   const entry = ps.entries.get(id);
   if (!entry) return 'neu';
@@ -294,8 +378,8 @@ export function statusOf(id) {
 
 /**
  * Speichert eine Antwort.
- * Richtig und fällig (oder neu): ein Fach weiter. Richtig, aber noch nicht fällig
- * (freies Üben): Fach bleibt. Falsch: Fach 1, morgen wieder fällig.
+ * Richtig und fällig (oder neu): eine Stufe weiter. Richtig, aber noch nicht fällig
+ * (freies Üben): Stufe bleibt. Falsch: Stufe 1, morgen wieder fällig.
  */
 export function record(id, correct) {
   const day = today();
@@ -357,11 +441,12 @@ export function nextDueDate(ids) {
 
 /**
  * Einmalige Übernahme der bisherigen Bewertungen aus cards.json, solange es
- * noch keine lernstand.json gibt: „gelernt“ → Fach 2, „lernen“ → Fach 1.
+ * noch keinen Lernstand gibt: „gelernt“ → Stufe 2, „lernen“ → Stufe 1.
+ * Nur für den Repository-Besitzer, denn die Bewertungen in cards.json stammen von ihm.
  * Gelernte Karten werden über drei Tage verteilt fällig, damit kein Berg entsteht.
  */
 export function migrateFromCards(cards) {
-  if (!ps.loaded || ps.remoteExists || ps.entries.size) return 0;
+  if (!ps.loaded || ps.remoteExists || ps.entries.size || !isOwner(ps.getSettings())) return 0;
   const day = today();
   let n = 0;
   cards.forEach((card, i) => {

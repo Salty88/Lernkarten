@@ -4,7 +4,8 @@
  * Reiter „Üben“:
  *  - „Heute fällig“: fällige Karten (Leitner) plus eine begrenzte Zahl neuer Karten,
  *    bewusst gemischt über Fächer und Themen (Interleaving)
- *  - „Freies Üben“: Fach und Thema frei wählen
+ *  - Fach wählbar (Schwerpunkt) oder „Alle“ gemischt; das Fach ist stets sichtbar
+ *  - „Freies Üben“: zusätzlich Thema frei wählen
  *  - Übungsformen: Klassisch (umdrehen, selbst bewerten), Multiple Choice
  *    (Begriff → Erklärung) und Begriff erkennen (Erklärung → Begriff)
  *  - Tipps und Verweise ins Wissen
@@ -12,7 +13,19 @@
 
 import { el, button, plural, norm } from './ui.js';
 import { renderRich, plainText } from './richtext.js';
-import { store, createLinker, termsInText, targetName, targetForQuelle, merkerTitle, quelleGroup, fachKey as toFachKey } from './wissen-data.js';
+import {
+  store,
+  createLinker,
+  termsInText,
+  targetName,
+  targetForQuelle,
+  merkerTitle,
+  quelleGroup,
+  fachKey as toFachKey,
+  fachLabel,
+  fachName,
+  FAECHER,
+} from './wissen-data.js';
 import { openSheet, openMerker, openEntry } from './wissen.js';
 import { today, addDays, getEntry, record, dayStats, nextDueDate, countDue, progressRevision } from './progress.js';
 
@@ -36,7 +49,7 @@ const pr = {
   format: 'gemischt',
   newPerDay: 20,
   sessionMax: 60,
-  filter: ALL,
+  fach: ALL, // Schwerpunkt-Fach (Fach-Schlüssel) oder ALL
   theme: ALL,
   queue: [],
   index: 0,
@@ -58,6 +71,7 @@ function loadPrefs() {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
     if (['heute', 'frei'].includes(p.mode)) pr.mode = p.mode;
     if (['gemischt', 'mc', 'klassisch'].includes(p.format)) pr.format = p.format;
+    if (typeof p.fach === 'string') pr.fach = p.fach;
     if (Number.isInteger(p.newPerDay)) pr.newPerDay = Math.min(200, Math.max(0, p.newPerDay));
     if (Number.isInteger(p.sessionMax)) pr.sessionMax = Math.min(300, Math.max(5, p.sessionMax));
   } catch {
@@ -67,7 +81,7 @@ function loadPrefs() {
 
 function savePrefs() {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ mode: pr.mode, format: pr.format, newPerDay: pr.newPerDay, sessionMax: pr.sessionMax }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ mode: pr.mode, format: pr.format, fach: pr.fach, newPerDay: pr.newPerDay, sessionMax: pr.sessionMax }));
   } catch {
     /* nur Komfort */
   }
@@ -135,10 +149,24 @@ function truncate(text, max = OPTION_MAX_CHARS) {
 /* Sitzung aufbauen                                                    */
 /* ------------------------------------------------------------------ */
 
+function inFach(card, fach = pr.fach) {
+  return fach === ALL || toFachKey(card.fach) === fach;
+}
+
+/** Wie viele Karten „Heute fällig“ in einem Fach enthalten würde (fällige plus neue bis zum Limit). */
+function todayCount(fach) {
+  const day = today();
+  const cards = practicable().filter((c) => inFach(c, fach));
+  const due = countDue(cards.map((c) => c.id), day);
+  const allowance = Math.max(0, pr.newPerDay + pr.extraNew - dayStats(day).neu);
+  const fresh = Math.min(cards.filter((c) => !getEntry(c.id)).length, allowance);
+  return Math.min(due + fresh, pr.sessionMax);
+}
+
 /** „Heute fällig“: fällige zuerst, dazu neue Karten bis zum Tageslimit; gemischt. */
 function buildToday() {
   const day = today();
-  const cards = practicable();
+  const cards = practicable().filter((c) => inFach(c));
   const due = cards.filter((c) => {
     const e = getEntry(c.id);
     return e && e.f <= day;
@@ -153,7 +181,7 @@ function buildToday() {
 
 function buildFree() {
   const cards = practicable().filter(
-    (c) => (pr.filter === ALL || toFachKey(c.fach) === pr.filter) && (pr.theme === ALL || themeOf(c) === pr.theme),
+    (c) => inFach(c) && (pr.theme === ALL || themeOf(c) === pr.theme),
   );
   return interleave(cards).map((c) => c.id);
 }
@@ -408,16 +436,33 @@ function renderSessionBar() {
   }
   $('session-bar').hidden = false;
   const label = pr.mode === 'heute' ? 'Heute' : 'Freies Üben';
-  text.textContent = `${label}: ${doneCount} von ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
+  const fach = pr.fach === ALL ? 'Alle Fächer' : fachLabel(pr.fach);
+  text.textContent = `${fach} · ${label}: ${doneCount} von ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
   $('session-fill').style.width = `${Math.round((doneCount / total) * 100)}%`;
 }
 
 function updateDueBadge() {
-  const ids = practicable().map((c) => c.id);
-  const day = today();
-  const due = countDue(ids, day);
-  const fresh = Math.min(ids.filter((id) => !getEntry(id)).length, Math.max(0, pr.newPerDay + pr.extraNew - dayStats(day).neu));
-  $('due-count').textContent = String(Math.min(due + fresh, pr.sessionMax));
+  $('due-count').textContent = String(todayCount(pr.fach));
+  renderFachChips();
+}
+
+/** Fächer als Leiste: Schwerpunkt wählen, mit Anzahl (heute fällig bzw. Karten). */
+function renderFachChips() {
+  const cards = practicable();
+  const present = new Set(cards.map((c) => toFachKey(c.fach)));
+  const extra = [...present].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
+  const keys = [ALL, ...FAECHER.map((f) => f.id), ...extra];
+  if (!keys.includes(pr.fach)) pr.fach = ALL;
+  const count = (key) => (pr.mode === 'heute' ? todayCount(key) : cards.filter((c) => inFach(c, key)).length);
+  $('practice-fach').replaceChildren(
+    ...keys.map((key) => {
+      const chip = button(`chip${key === pr.fach ? ' is-active' : ''}${key !== ALL && !present.has(key) ? ' is-empty' : ''}`, key === ALL ? 'Alle Fächer' : fachLabel(key), () => setFach(key));
+      chip.title = key === ALL ? 'Alle Fächer gemischt' : fachName(key);
+      chip.setAttribute('aria-pressed', String(key === pr.fach));
+      chip.append(el('span', 'chip-count', String(count(key))));
+      return chip;
+    }),
+  );
 }
 
 export function renderPractice({ animate = true } = {}) {
@@ -444,6 +489,13 @@ export function renderPractice({ animate = true } = {}) {
     return;
   }
 
+  if (pr.fach !== ALL && !practicable().some((c) => inFach(c))) {
+    showEmpty('📭', `In ${fachLabel(pr.fach)} gibt es noch keine Karten`, `${fachName(pr.fach)}: Importiere einen Merker im Tab „Wissen“ und erzeuge Karten im Tab „Lücken“, oder lege eigene Karten an.`, [
+      ['Alle Fächer üben', () => setFach(ALL), true],
+    ]);
+    renderSessionBar();
+    return;
+  }
   const card = currentCard();
   if (!card) {
     renderDone();
@@ -462,6 +514,14 @@ function renderDone() {
     const next = nextDueDate(ids);
     const unseen = ids.filter((id) => !getEntry(id)).length;
     const actions = [['Freies Üben', () => setMode('frei'), false]];
+    // Andere Fächer mit fälligen Karten vorschlagen
+    if (pr.fach !== ALL) {
+      FAECHER.filter((f) => f.id !== pr.fach)
+        .map((f) => [f.id, todayCount(f.id)])
+        .filter(([, n]) => n > 0)
+        .slice(0, 3)
+        .forEach(([key, n]) => actions.unshift([`Weiter mit ${fachLabel(key)} (${n})`, () => setFach(key), false]));
+    }
     if (unseen) {
       actions.unshift([
         `${EXTRA_NEW_STEP} weitere neue Karten`,
@@ -473,14 +533,14 @@ function renderDone() {
       ]);
     }
     if (answered) {
-      showEmpty('🎉', 'Für heute geschafft!', `${plural(answered, 'Antwort', 'Antworten')}: ✓ ${pr.stats.richtig} richtig, ✗ ${pr.stats.falsch} falsch.${next ? ` Die nächsten Karten sind ${formatDate(next)} fällig.` : ''} Noch ${plural(unseen, 'neue Karte', 'neue Karten')} ungeübt.`, actions);
+      showEmpty('🎉', pr.fach === ALL ? 'Für heute geschafft!' : `${fachLabel(pr.fach)} für heute geschafft!`, `${plural(answered, 'Antwort', 'Antworten')}: ✓ ${pr.stats.richtig} richtig, ✗ ${pr.stats.falsch} falsch.${next ? ` Die nächsten Karten sind ${formatDate(next)} fällig.` : ''} Noch ${plural(unseen, 'neue Karte', 'neue Karten')} ungeübt.`, actions);
     } else {
-      showEmpty('☕', 'Heute ist nichts fällig', `${next ? `Die nächsten Karten sind ${formatDate(next)} fällig. ` : ''}Noch ${plural(unseen, 'neue Karte', 'neue Karten')} ungeübt.`, actions);
+      showEmpty('☕', pr.fach === ALL ? 'Heute ist nichts fällig' : `In ${fachLabel(pr.fach)} ist heute nichts fällig`, `${next ? `Die nächsten Karten sind ${formatDate(next)} fällig. ` : ''}Noch ${plural(unseen, 'neue Karte', 'neue Karten')} ungeübt.`, actions);
     }
   } else {
     const answered = pr.stats.richtig + pr.stats.falsch;
     if (!pr.queue.length) {
-      showEmpty('🔍', 'Keine Karten in dieser Auswahl', 'Wähle ein anderes Fach oder Thema.', [['Alle Fächer', () => setFilter(ALL, ALL), true]]);
+      showEmpty('🔍', 'Keine Karten in dieser Auswahl', 'Wähle ein anderes Fach oder Thema.', [['Alle Fächer', () => setFach(ALL), true]]);
     } else {
       showEmpty('🎉', 'Runde geschafft!', `${plural(answered, 'Antwort', 'Antworten')}: ✓ ${pr.stats.richtig} richtig, ✗ ${pr.stats.falsch} falsch.`, [
         ['🔀 Neu mischen & weiter üben', startSession, true],
@@ -496,7 +556,7 @@ function renderCurrent(animate) {
   const view = bridge.view(card);
   const entry = getEntry(card.id);
   const formLabel = format === 'classic' ? 'Klassisch' : format === 'reverse' ? 'Begriff erkennen' : 'Multiple Choice';
-  $('practice-progress').textContent = `${bridge.formatNr(card.nr)} · ${entry ? `Fach ${entry.b}` : 'Neu'} · ${formLabel}`;
+  $('practice-progress').textContent = `${fachLabel(toFachKey(card.fach))} · ${bridge.formatNr(card.nr)} · ${entry ? `Stufe ${entry.b}` : 'Neu'} · ${formLabel}`;
 
   const classic = format === 'classic';
   $('card-scene').hidden = !classic;
@@ -718,19 +778,27 @@ function setMode(mode) {
   startSession();
 }
 
-function setFilter(filter, theme) {
-  pr.filter = filter;
-  pr.theme = theme;
+/** Schwerpunkt-Fach wählen (gilt für „Heute fällig“ und „Freies Üben“). */
+function setFach(key) {
+  pr.fach = key;
+  pr.theme = ALL;
+  pr.extraNew = 0;
+  savePrefs();
   renderFilters();
+  startSession();
+}
+
+function setTheme(theme) {
+  pr.theme = theme;
   startSession();
 }
 
 /** Fach- und Themenfilter für „Freies Üben“. */
 export function renderFilters() {
-  pr.filter = bridge.fillSubjectSelect($('practice-filter'), pr.filter);
+  renderFachChips();
   const counts = new Map();
   for (const card of practicable()) {
-    if (pr.filter !== ALL && toFachKey(card.fach) !== pr.filter) continue;
+    if (!inFach(card)) continue;
     const theme = themeOf(card);
     counts.set(theme, (counts.get(theme) || 0) + 1);
   }
@@ -838,7 +906,7 @@ function bindPlan() {
 
 /**
  * @param {object} b  Brücke zu app.js: cards(), view(card), formatNr(nr), isConfigured(),
- *                    openSettings(), switchTab(tab), fillSubjectSelect(select, current), onGraded()
+ *                    openSettings(), switchTab(tab), onGraded()
  */
 export function initPractice(b) {
   bridge = b;
@@ -852,8 +920,7 @@ export function initPractice(b) {
       renderPractice();
     }
   });
-  $('practice-filter').addEventListener('change', (event) => setFilter(event.target.value, ALL));
-  $('practice-theme').addEventListener('change', (event) => setFilter(pr.filter, event.target.value));
+  $('practice-theme').addEventListener('change', (event) => setTheme(event.target.value));
   $('shuffle-btn').addEventListener('click', startSession);
   $('flashcard').addEventListener('click', flipCard);
   $('rate-again').addEventListener('click', () => rateClassic(false));

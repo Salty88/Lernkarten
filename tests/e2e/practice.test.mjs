@@ -395,4 +395,66 @@ try {
   await app.close();
 }
 
+/* ---------- Gesamtprüfung: Befunde ---------- */
+app = await startApp({ viewport: { width: 375, height: 667 }, seed: seedWith(Array.from({ length: 12 }, (_, i) => card(`k${i + 1}`, 'ReWe', `${i} ${LONG.repeat(3)}`.slice(0, 280), `${i} ${LONG.repeat(2)}`.slice(0, 190)))) });
+try {
+  const { page } = app;
+  await setFormat(page, 'mc');
+  await page.click('.mc-option >> nth=0');
+  await page.waitForTimeout(200);
+  await page.evaluate(() => window.scrollTo(0, 1e6));
+  await page.waitForTimeout(150);
+  await page.click('#mc-next');
+  await page.waitForTimeout(250);
+  check('Neue Auswahlfrage beginnt oben', (await page.evaluate(() => scrollY)) === 0, String(await page.evaluate(() => scrollY)));
+  await page.keyboard.press('1');
+  await page.keyboard.press('Enter');
+  await setFormat(page, 'klassisch');
+  await page.click('#flashcard');
+  await page.evaluate(() => window.scrollTo(0, 1e6));
+  check('Lange Lernkarte ist scrollbar', (await page.evaluate(() => scrollY)) > 0, String(await page.evaluate(() => scrollY)));
+  await page.waitForTimeout(150);
+  await page.click('#rate-known');
+  await page.waitForTimeout(250);
+  check('Neue Lernkarte beginnt oben', (await page.evaluate(() => scrollY)) === 0, String(await page.evaluate(() => scrollY)));
+} catch (e) {
+  check('Scroll-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
+app = await startApp({ seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'klassisch');
+  await page.click('#rate-known');
+  await page.waitForTimeout(300);
+  await page.click('#hint-btn');
+  await page.waitForTimeout(4500);
+  check('Tipp bleibt nach dem Speichern offen', await page.isVisible('#hint-box'));
+} catch (e) {
+  check('Tipp-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
+app = await startApp({ seed: seedWith(MANY) });
+try {
+  const { page, repo } = app;
+  // Lernstand kommt verzögert an (langsames Netz): die erste Karte darf trotzdem nicht wechseln
+  await page.route('https://api.github.com/**/lernstand**', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await repo.handler(route);
+  });
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('practice-progress').textContent.trim().length > 0);
+  const first = await page.textContent('#practice-progress');
+  await page.waitForTimeout(3000);
+  check('Erste Karte bleibt beim Start', (await page.textContent('#practice-progress')) === first, `${first} → ${await page.textContent('#practice-progress')}`);
+} catch (e) {
+  check('Start-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 finish();

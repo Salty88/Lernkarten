@@ -192,15 +192,21 @@ function buildFree() {
   return interleave(cards).map((c) => c.id);
 }
 
-export function startSession() {
+/**
+ * @param {{ keepCurrent?: boolean }} [o]  keepCurrent: die gerade gezeigte Karte bleibt vorne,
+ *   sofern sie noch dazugehört (z. B. Lernstand kommt nach dem Start an)
+ */
+export function startSession({ keepCurrent = false } = {}) {
+  const kept = keepCurrent && pr.current && !pr.current.answered ? pr.current : null;
   pr.queue = pr.mode === 'heute' ? buildToday() : buildFree();
+  if (kept && pr.queue.includes(kept.card.id)) pr.queue = [kept.card.id, ...pr.queue.filter((id) => id !== kept.card.id)];
   pr.index = 0;
   pr.retried = new Set();
   pr.stats = { richtig: 0, falsch: 0 };
   pr.builtFor = pr.mode === 'heute' ? today() : null;
   pr.builtRev = progressRevision();
-  pr.current = null;
-  renderPractice();
+  pr.current = kept && pr.queue[0] === kept.card.id ? kept : null;
+  renderPractice({ animate: !pr.current });
 }
 
 /** Nach Datenänderungen: gelöschte Karten entfernen, neue im freien Modus ergänzen. */
@@ -521,7 +527,10 @@ export function renderPractice({ animate = true } = {}) {
     renderDone();
     return;
   }
-  if (!pr.current || pr.current.card.id !== card.id) prepareCurrent(card);
+  if (!pr.current || pr.current.card.id !== card.id) {
+    prepareCurrent(card);
+    window.scrollTo(0, 0); // neue Karte: Frage von Anfang an sichtbar
+  }
   $('practice-empty').hidden = true;
   $('practice-area').hidden = false;
   renderCurrent(animate);
@@ -571,9 +580,16 @@ function renderDone() {
   renderSessionBar();
 }
 
+/** Angezeigter Text einer Karte (zum Erkennen echter Änderungen nach einem Sync). */
+function cardText(card) {
+  const view = bridge.view(card);
+  return `${view.frage}\u0000${view.antwort}`;
+}
+
 function renderCurrent(animate) {
   const { card, format } = pr.current;
   const view = bridge.view(card);
+  pr.current.shownText = cardText(card);
   const entry = getEntry(card.id);
   const formLabel = format === 'classic' ? 'Klassisch' : format === 'reverse' ? 'Begriff erkennen' : 'Multiple Choice';
   $('practice-progress').textContent = `${fachLabel(toFachKey(card.fach))} · ${bridge.formatNr(card.nr)} · ${entry ? `Stufe ${entry.b}` : 'Neu'} · ${formLabel}`;
@@ -964,10 +980,18 @@ export function refreshPractice() {
   const untouched = pr.index === 0 && pr.stats.richtig + pr.stats.falsch === 0;
   const freshProgress = pr.mode === 'heute' && untouched && pr.builtRev !== progressRevision();
   if ((pr.mode === 'heute' && pr.builtFor !== today()) || (!pr.queue.length && practicable().length) || freshProgress) {
-    startSession();
+    startSession({ keepCurrent: freshProgress });
     return;
   }
   reconcile();
+
+  // Gleiche Karte mit gleichem Text (z. B. nach dem Speichern im Hintergrund): nicht neu zeichnen,
+  // damit ein offener Tipp, die Denkzeit und das Einblenden ungestört weiterlaufen
+  if (pr.current && pr.current.shownText === cardText(pr.current.card)) {
+    renderSessionBar();
+    updateDueBadge();
+    return;
+  }
 
   if (pr.current && pr.current.answered) {
     renderSessionBar();

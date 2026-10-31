@@ -23,6 +23,7 @@ import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyMo
 import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
 import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
 import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
+import { initFachSheet } from './fach-sheet.js';
 import { initTheme, getThemeChoice, setThemeChoice } from './theme.js';
 import {
   initProgress,
@@ -1014,6 +1015,7 @@ function init() {
   state.lastRemoteIds = state.cards.filter((card) => !state.pending.has(card.id)).map((card) => card.id);
   renderSubjects();
   renderCardList();
+  initFachSheet();
   initPractice(practiceBridge);
 
   if (hasValidSettings(state.settings)) {

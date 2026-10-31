@@ -16,24 +16,26 @@
   <main class="container">
     <!-- ============ Üben ============ -->
     <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
-      <div class="practice-top">
-        <div class="segmented" id="practice-mode" role="tablist" aria-label="Übungsart">
-          <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute fällig <span class="chip-count" id="due-count"></span></button>
-          <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Freies Üben</button>
+      <div class="practice-sticky">
+        <div class="practice-head">
+          <button class="fach-btn" id="practice-fach-btn" type="button" aria-haspopup="dialog">
+            <span class="fach-dot" aria-hidden="true"></span><span id="practice-fach-label">Alle Fächer</span><span class="fach-caret" aria-hidden="true">▼</span>
+          </button>
+          <div class="segmented segmented-compact" id="practice-mode" role="tablist" aria-label="Übungsart">
+            <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute <span class="chip-count" id="due-count"></span></button>
+            <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Frei</button>
+          </div>
+        </div>
+        <div class="session-bar" id="session-bar" hidden>
+          <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
+          <p class="session-text" id="session-text"></p>
         </div>
       </div>
-
-      <div class="chips chips-scroll practice-fach" id="practice-fach" role="toolbar" aria-label="Fach wählen"></div>
 
       <div class="toolbar" id="free-toolbar" hidden>
         <label class="visually-hidden" for="practice-theme">Thema filtern</label>
         <select class="select" id="practice-theme" hidden></select>
         <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
-      </div>
-
-      <div class="session-bar" id="session-bar" hidden>
-        <p class="session-text" id="session-text"></p>
-        <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
       </div>
 
       <div class="practice-area" id="practice-area">
@@ -390,6 +392,14 @@
   </div>
 
   <!-- ============ Toast ============ -->
+  <div class="modal-backdrop sheet-backdrop" id="fach-sheet" hidden>
+    <div class="modal sheet" role="dialog" aria-modal="true" aria-labelledby="fach-sheet-title">
+      <span class="sheet-grip" aria-hidden="true"></span>
+      <h2 class="sheet-title" id="fach-sheet-title">Fach wählen</h2>
+      <div class="sheet-list" id="fach-sheet-list"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span class="toast-text" id="toast-text"></span>
     <button class="toast-action" id="toast-action" type="button" hidden></button>

@@ -2089,15 +2089,6 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 
 /* ---------- Üben: Tagesplan, Fortschritt, Multiple Choice ---------- */
 
-.practice-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
 .select-compact {
   width: auto;
   min-width: 150px;
@@ -2106,18 +2097,23 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 #free-toolbar { margin-bottom: 14px; }
 
 .session-bar {
-  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .session-text {
-  margin-bottom: 6px;
+  flex-shrink: 0;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--muted);
-  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .session-track {
+  flex: 1;
+  min-width: 40px;
   height: 6px;
   border-radius: 999px;
   background: var(--border);
@@ -2272,20 +2268,10 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 .plan > p { margin: 10px 0; }
 
 @media (max-width: 600px) {
-  .practice-top { flex-direction: column; align-items: stretch; }
-  #practice-mode { display: grid; grid-template-columns: 1fr 1fr; }
   .select-compact { flex: 1; }
   .mc-question { padding: 40px 16px 20px; }
   .mc-prompt { font-size: 1.12rem; }
   .mc-prompt-long { font-size: 0.95rem; }
-}
-
-/* ---------- Üben: Fach-Schwerpunkt ---------- */
-
-.practice-fach { margin-bottom: 14px; }
-.chip.is-empty:not(.is-active) { opacity: 0.55; }
-@media (min-width: 700px) {
-  .practice-fach { flex-wrap: wrap; overflow: visible; }
 }
 
 /* ---------- Neuer Look: Feinschliff (Etappe 1) ---------- */
@@ -2325,4 +2311,86 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
     flex: 1 0 calc(100% - 46px);
     margin-left: 46px;
   }
+}
+
+/* ---------- Üben: Kopf und Fach-Blatt (Etappe 2) ---------- */
+
+.practice-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin-top: calc(-1 * env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 0 12px;
+  background: var(--bg);
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+}
+
+.practice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 60%;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#practice-fach-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fach-dot { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.fach-caret { color: var(--muted); font-size: 0.72rem; }
+
+.segmented.segmented-compact { display: inline-flex; flex: 0 0 auto; border-radius: 999px; }
+.segmented-compact .seg { min-height: 38px; padding: 6px 14px; border-radius: 999px; white-space: nowrap; }
+
+.sheet-backdrop { align-items: flex-end; padding: 0; }
+.modal.sheet {
+  max-width: 480px;
+  max-height: 85dvh;
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.sheet-grip { display: block; width: 40px; height: 5px; margin: 0 auto 12px; border-radius: 999px; background: var(--border); }
+.sheet-title { margin: 0 0 8px; font-size: 1.15rem; }
+.sheet-list { display: flex; flex-direction: column; }
+.sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-option:last-child { border-bottom: 0; }
+.sheet-icon { flex-shrink: 0; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); font-size: 1.15rem; }
+.sheet-name { flex: 1; min-width: 0; font-weight: 650; line-height: 1.3; }
+.sheet-count { flex-shrink: 0; min-width: 34px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 0.85rem; font-weight: 700; text-align: center; }
+.sheet-option.is-active .sheet-name { color: var(--accent); }
+.sheet-option.is-active .sheet-count { background: var(--accent); color: var(--accent-text); }
+.sheet-option.is-empty { opacity: 0.45; }
+
+@media (min-width: 601px) {
+  .sheet-backdrop { align-items: center; padding: 20px; }
+  .modal.sheet { border-radius: var(--radius); }
 }

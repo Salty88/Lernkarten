@@ -11,7 +11,8 @@
  *  - Tipps und Verweise ins Wissen
  */
 
-import { el, button, plural, norm } from './ui.js';
+import { el, button, plural, norm, isAnyModalOpen } from './ui.js';
+import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
 import { renderRich, plainText } from './richtext.js';
 import {
   store,
@@ -435,34 +436,47 @@ function renderSessionBar() {
     return;
   }
   $('session-bar').hidden = false;
-  const label = pr.mode === 'heute' ? 'Heute' : 'Freies Üben';
-  const fach = pr.fach === ALL ? 'Alle Fächer' : fachLabel(pr.fach);
-  text.textContent = `${fach} · ${label}: ${doneCount} von ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
+  text.textContent = `${doneCount} / ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
   $('session-fill').style.width = `${Math.round((doneCount / total) * 100)}%`;
 }
 
 function updateDueBadge() {
   $('due-count').textContent = String(todayCount(pr.fach));
-  renderFachChips();
+  renderFachButton();
 }
 
-/** Fächer als Leiste: Schwerpunkt wählen, mit Anzahl (heute fällig bzw. Karten). */
-function renderFachChips() {
+/** Fächer mit Anzahl (heute fällig bzw. Karten) für Knopf und Blatt. */
+function fachOptions() {
   const cards = practicable();
   const present = new Set(cards.map((c) => toFachKey(c.fach)));
   const extra = [...present].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
   const keys = [ALL, ...FAECHER.map((f) => f.id), ...extra];
-  if (!keys.includes(pr.fach)) pr.fach = ALL;
   const count = (key) => (pr.mode === 'heute' ? todayCount(key) : cards.filter((c) => inFach(c, key)).length);
-  $('practice-fach').replaceChildren(
-    ...keys.map((key) => {
-      const chip = button(`chip${key === pr.fach ? ' is-active' : ''}${key !== ALL && !present.has(key) ? ' is-empty' : ''}`, key === ALL ? 'Alle Fächer' : fachLabel(key), () => setFach(key));
-      chip.title = key === ALL ? 'Alle Fächer gemischt' : fachName(key);
-      chip.setAttribute('aria-pressed', String(key === pr.fach));
-      chip.append(el('span', 'chip-count', String(count(key))));
-      return chip;
-    }),
-  );
+  return keys.map((key) => ({
+    key,
+    kurz: key === ALL ? 'Alle Fächer gemischt' : fachLabel(key),
+    name: key === ALL ? '' : fachName(key),
+    count: count(key),
+    empty: key !== ALL && !present.has(key),
+  }));
+}
+
+/** Fach-Knopf im Kopf; ein verschwundenes Zusatzfach fällt auf „Alle Fächer“ zurück. */
+function renderFachButton() {
+  const keys = fachOptions().map((o) => o.key);
+  if (!keys.includes(pr.fach)) pr.fach = ALL;
+  $('practice-fach-label').textContent = pr.fach === ALL ? 'Alle Fächer' : fachLabel(pr.fach);
+  $('practice-fach-btn').title = pr.fach === ALL ? 'Alle Fächer gemischt' : fachName(pr.fach);
+  refreshFachSheet();
+}
+
+function openFachChoice() {
+  openFachSheet({
+    title: pr.mode === 'heute' ? 'Fach wählen · heute fällig' : 'Fach wählen · Karten',
+    getOptions: fachOptions,
+    current: pr.fach,
+    onPick: setFach,
+  });
 }
 
 export function renderPractice({ animate = true } = {}) {
@@ -795,7 +809,7 @@ function setTheme(theme) {
 
 /** Fach- und Themenfilter für „Freies Üben“. */
 export function renderFilters() {
-  renderFachChips();
+  renderFachButton();
   const counts = new Map();
   for (const card of practicable()) {
     if (!inFach(card)) continue;
@@ -847,7 +861,7 @@ export function refreshPractice() {
 
 /** Tastenkürzel beim Üben; liefert true, wenn die Taste verarbeitet wurde. */
 export function handlePracticeKey(event) {
-  if ($('practice-area').hidden || !pr.current) return false;
+  if (isAnyModalOpen() || $('practice-area').hidden || !pr.current) return false;
   const onControl = event.target instanceof HTMLElement && event.target.closest('button, a, select') !== null;
   const key = event.key;
   if (key === 't' || key === 'T') {
@@ -920,6 +934,7 @@ export function initPractice(b) {
       renderPractice();
     }
   });
+  $('practice-fach-btn').addEventListener('click', openFachChoice);
   $('practice-theme').addEventListener('change', (event) => setTheme(event.target.value));
   $('shuffle-btn').addEventListener('click', startSession);
   $('flashcard').addEventListener('click', flipCard);

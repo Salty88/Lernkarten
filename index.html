@@ -41,6 +41,7 @@
 
       <div class="practice-area" id="practice-area">
         <p class="visually-hidden" id="practice-progress" aria-live="polite"></p>
+        <div class="practice-flash" id="practice-flash" aria-hidden="true"></div>
 
         <div class="card-scene" id="card-scene">
           <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Antwort zeigen" data-phase="verdeckt">
@@ -70,9 +71,9 @@
             <span class="face-label" id="mc-label"></span>
             <p class="mc-prompt" id="mc-prompt"></p>
           </div>
+          <div class="mc-feedback feedback" id="mc-feedback" role="status" hidden></div>
           <div class="mc-options" id="mc-options"></div>
           <button class="mc-more" id="mc-more" type="button" hidden></button>
-          <p class="mc-feedback" id="mc-feedback" role="status" hidden></p>
           <div class="mc-explain" id="mc-explain" hidden></div>
         </div>
 

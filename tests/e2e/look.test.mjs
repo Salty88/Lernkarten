@@ -1,6 +1,6 @@
 // Neuer Look: jeder Reiter hell und dunkel; Fotos in tests/e2e/out/
 import fs from 'fs';
-import { startApp, check, finish } from './harness.mjs';
+import { startApp, check, finish, defaultSeed } from './harness.mjs';
 
 const OUT = new URL('./out/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });
@@ -64,6 +64,58 @@ for (const scheme of ['light', 'dark']) {
     check(`${scheme}: keine JavaScript-Fehler`, app.errors.length === 0, app.errors.join('; '));
   } catch (e) {
     check(`${scheme}: Test lief ohne Abbruch`, false, e.message.split('\n')[0]);
+  } finally {
+    await app.close();
+  }
+}
+// Etappe 2: Üben (Denkzeit, Antwort, Richtig, Falsch, Fach-Blatt)
+const A = ['Gegenüberstellung von Vermögen und Kapital zum Stichtag.', 'Verteilung des Wertverzehrs auf die Nutzungsjahre.', 'Erlöse abzüglich variabler Kosten je Stück.', 'Menge, ab der beide Alternativen gleich viel kosten.', 'Kosten, die unabhängig von der Ausbringung anfallen.', 'Kosten, die sich mit der Ausbringung verändern.'];
+const CARDS = Array.from({ length: 12 }, (_, i) => ({ id: `k${i + 1}`, nr: i + 1, fach: 'ReWe', frage: `Frage ${i + 1}: Was beschreibt diesen Begriff?`, antwort: A[i % A.length] }));
+const bg = (page, sel) => page.$eval(sel, (n) => {
+  for (let e = n; e; e = e.parentElement) {
+    const c = getComputedStyle(e).backgroundColor;
+    if (c && !c.startsWith('rgba(0, 0, 0, 0)') && c !== 'transparent') return c;
+  }
+  return getComputedStyle(document.body).backgroundColor;
+});
+const fg = (page, sel) => page.$eval(sel, (n) => getComputedStyle(n).color);
+for (const scheme of ['light', 'dark']) {
+  const app = await startApp({ colorScheme: scheme, seed: { ...defaultSeed(), 'cards.json': JSON.stringify(CARDS) } });
+  const { page } = app;
+  try {
+    await page.click('#tab-mehr');
+    await page.selectOption('#practice-format', 'klassisch');
+    await page.click('#tab-practice');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}${scheme}-denkzeit.png` });
+    check(`${scheme}: Denkzeit-Text lesbar`, contrast(await fg(page, '#think-label'), await bg(page, '#think-label')) >= 4.5, contrast(await fg(page, '#think-label'), await bg(page, '#think-label')).toFixed(2));
+    await page.click('#flashcard');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}${scheme}-antwort.png` });
+    await page.click('#practice-fach-btn');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}${scheme}-fach-blatt.png` });
+    check(`${scheme}: Fach-Blatt lesbar`, contrast(await fg(page, '.sheet-name'), await bg(page, '.sheet-name')) >= 4.5);
+    await page.keyboard.press('Escape');
+    await page.click('#tab-mehr');
+    await page.selectOption('#practice-format', 'mc');
+    await page.click('#tab-practice');
+    await page.waitForTimeout(300);
+    for (const result of ['richtig', 'falsch']) {
+      const prompt = (await page.textContent('#mc-prompt')).trim();
+      const right = CARDS.find((c) => c.frage === prompt).antwort;
+      const texts = await page.$$eval('#mc-options .mc-text', (n) => n.map((x) => x.textContent));
+      await page.click(`#mc-options .mc-option >> nth=${texts.findIndex((t) => (t === right) === (result === 'richtig'))}`);
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${OUT}${scheme}-practice-${result}.png` });
+      const c = contrast(await fg(page, '.feedback-title'), await bg(page, '.feedback-title'));
+      check(`${scheme}: Rückmeldung „${result}“ lesbar`, c >= 4.5, c.toFixed(2));
+      await page.click('#mc-next');
+      await page.waitForTimeout(300);
+    }
+    check(`${scheme}: keine JavaScript-Fehler (Üben)`, app.errors.length === 0, app.errors.join('; '));
+  } catch (e) {
+    check(`${scheme}: Üben-Fotos ohne Abbruch`, false, e.message.split('\n')[0]);
   } finally {
     await app.close();
   }

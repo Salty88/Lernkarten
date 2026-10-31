@@ -750,10 +750,13 @@ function answerChoice(index) {
   $('mc-area').classList.add('is-answered');
   $('mc-more').textContent = `${plural(collapsed, 'weitere Antwort', 'weitere Antworten')} ausgeblendet ▾`;
   $('mc-more').hidden = collapsed === 0;
+  const { before, after } = grade(current.card, correct, { advance: false });
   const feedback = $('mc-feedback');
   feedback.hidden = false;
   feedback.dataset.result = correct ? 'richtig' : 'falsch';
-  feedback.textContent = correct ? '✓ Richtig!' : '✗ Leider falsch. Die richtige Antwort ist markiert.';
+  const text = el('div', 'feedback-body');
+  text.append(el('span', 'feedback-title', correct ? 'Richtig!' : 'Leider falsch'), el('span', 'feedback-sub', feedbackSub(before, after, correct)));
+  feedback.replaceChildren(el('span', 'feedback-emoji', correct ? '👍' : '👎'), text);
 
   // Vollständige Antwort mit Verweisen zum Nachlesen
   const view = bridge.view(current.card);
@@ -765,7 +768,22 @@ function answerChoice(index) {
   renderCardLinks(current.card);
   $('mc-next').hidden = false;
   $('mc-next').focus({ preventScroll: true });
-  grade(current.card, correct, { advance: false });
+}
+
+/** Wann eine Karte wieder fällig ist, in Worten. */
+function when(day) {
+  const now = today();
+  if (day <= now) return 'heute';
+  if (day === addDays(now, 1)) return 'morgen';
+  const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${now}T00:00:00Z`)) / 86400000);
+  return `in ${days} Tagen`;
+}
+
+/** Zeile unter „Richtig!“ bzw. „Leider falsch“ (Stufe und nächste Fälligkeit). */
+function feedbackSub(before, after, correct) {
+  if (!correct) return `Richtige Antwort grün markiert · kommt ${when(after.f)} wieder`;
+  const rose = !before || after.b > before.b;
+  return `${rose ? 'Weiter in' : 'Bleibt in'} Stufe ${after.b} · wieder fällig ${when(after.f)}`;
 }
 
 function showAllOptions() {
@@ -784,7 +802,8 @@ function nextCard() {
 
 /** Speichert die Antwort im Lernstand; falsche Karten kommen am Ende der Sitzung noch einmal. */
 function grade(card, correct, { advance }) {
-  record(card.id, correct);
+  const before = getEntry(card.id);
+  const after = record(card.id, correct);
   pr.stats[correct ? 'richtig' : 'falsch'] += 1;
   if (!correct && !pr.retried.has(card.id)) {
     pr.retried.add(card.id);
@@ -799,11 +818,26 @@ function grade(card, correct, { advance }) {
     renderPractice();
     if (!$('practice-area').hidden && pr.current && pr.current.format === 'classic') $('flashcard').focus({ preventScroll: true });
   }
+  return { before, after };
+}
+
+let flashTimer = null;
+
+/** Kurzes 👍/👎 über der Karte nach „Gewusst“/„Nochmal“; die nächste Karte steht schon da. */
+function flash(known) {
+  const node = $('practice-flash');
+  node.textContent = known ? '👍' : '👎';
+  node.classList.remove('is-on');
+  void node.offsetWidth;
+  node.classList.add('is-on');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => node.classList.remove('is-on'), 700);
 }
 
 function rateClassic(known) {
   if (!pr.current || pr.current.format !== 'classic') return;
   grade(pr.current.card, known, { advance: true });
+  flash(known);
 }
 
 /* ------------------------------------------------------------------ */

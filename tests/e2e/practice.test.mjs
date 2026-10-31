@@ -320,4 +320,61 @@ try {
   await app.close();
 }
 
+/* ---------- Task 4: Rückmeldung 👍 / 👎 ---------- */
+app = await startApp({ seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'mc');
+  await answer(page, MANY, true);
+  const fb = async () => page.evaluate(() => ({
+    emoji: document.querySelector('#mc-feedback .feedback-emoji')?.textContent,
+    title: document.querySelector('#mc-feedback .feedback-title')?.textContent,
+    sub: document.querySelector('#mc-feedback .feedback-sub')?.textContent,
+  }));
+  const r = await fb();
+  check('Richtig mit 👍', r.emoji === '👍' && r.title === 'Richtig!' && (r.sub || '').startsWith('Weiter in Stufe 1'), JSON.stringify(r));
+  const pos = await page.evaluate(() => ({ fb: document.getElementById('mc-feedback').getBoundingClientRect().top, q: document.querySelector('.mc-question').getBoundingClientRect().bottom, o: document.getElementById('mc-options').getBoundingClientRect().top }));
+  check('Direkt unter der Frage', pos.fb >= pos.q && pos.fb < pos.o, JSON.stringify(pos));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  await answer(page, MANY, false);
+  const f = await fb();
+  check('Falsch mit 👎', f.emoji === '👎' && f.title === 'Leider falsch' && f.sub === 'Richtige Antwort grün markiert · kommt morgen wieder', JSON.stringify(f));
+  const prompt = await page.textContent('#mc-prompt');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  await page.keyboard.press('1');
+  await page.waitForTimeout(200);
+  check('Tastatur Auswahl', (await page.textContent('#mc-prompt')) !== prompt && (await page.isVisible('#mc-feedback')));
+
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  await setFormat(page, 'klassisch');
+  const before = await page.textContent('#practice-progress');
+  await page.click('#rate-known');
+  await page.waitForTimeout(80);
+  const flash = await page.evaluate(() => ({ on: document.getElementById('practice-flash').classList.contains('is-on'), text: document.getElementById('practice-flash').textContent }));
+  check('Klassisch zeigt Emoji ohne zu warten', flash.on && flash.text === '👍' && (await page.textContent('#practice-progress')) !== before, JSON.stringify(flash));
+  await page.waitForTimeout(900);
+  check('Emoji verschwindet wieder', !(await page.evaluate(() => document.getElementById('practice-flash').classList.contains('is-on'))));
+  check('Keine JavaScript-Fehler (Rückmeldung)', app.errors.length === 0, app.errors.join('; '));
+} catch (e) {
+  check('Rückmeldung-Test lief ohne Abbruch', false, e.message.split('\n').slice(0, 8).join(' / '));
+} finally {
+  await app.close();
+}
+
+app = await startApp({ reducedMotion: 'reduce', seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'mc');
+  await answer(page, MANY, true);
+  const anim = await page.$eval('#mc-feedback', (n) => getComputedStyle(n).animationName);
+  check('Rückmeldung ohne Animation bei reduzierter Bewegung', anim === 'none' && (await page.isVisible('#mc-feedback')), anim);
+} catch (e) {
+  check('Rückmeldung (reduziert) lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 finish();

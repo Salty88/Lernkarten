@@ -55,6 +55,13 @@
             </div>
             <span class="face-hint" id="card-tap-hint">Tippen zeigt die Antwort</span>
           </div>
+          <div class="think" id="think">
+            <div class="think-track" id="think-track" aria-hidden="true"><div class="think-bar" id="think-bar"></div></div>
+            <div class="think-row">
+              <span class="think-label" id="think-label" aria-live="off"></span>
+              <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
+            </div>
+          </div>
         </div>
 
         <div class="mc" id="mc-area" hidden>
@@ -70,7 +77,6 @@
         </div>
 
         <div class="practice-help">
-          <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
           <div class="hint-box" id="hint-box" hidden></div>
           <div class="card-links" id="card-links" hidden></div>
         </div>
@@ -189,6 +195,18 @@
             <option value="gemischt">Gemischt</option>
             <option value="mc">Multiple Choice</option>
             <option value="klassisch">Klassisch</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <span class="settings-icon" aria-hidden="true">⏱</span>
+          <label class="settings-text" for="think-seconds"><span class="settings-label">Denkzeit</span><span class="settings-sub">Lernkarte: Antwort erscheint nach</span></label>
+          <select class="select select-compact" id="think-seconds">
+            <option value="0">aus</option>
+            <option value="3">3 s</option>
+            <option value="5">5 s</option>
+            <option value="10">10 s</option>
+            <option value="20">20 s</option>
+            <option value="30">30 s</option>
           </select>
         </div>
         <details class="settings-details" id="plan-settings">

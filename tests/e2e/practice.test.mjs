@@ -216,4 +216,108 @@ try {
   await app.close();
 }
 
+/* ---------- Task 3: Denkzeit mit Zeitbalken ---------- */
+const phase = (page) => page.getAttribute('#flashcard', 'data-phase');
+const label = async (page) => (await page.textContent('#think-label')).trim();
+const opacity = (page) => page.$eval('#card-answer-wrap', (n) => getComputedStyle(n).opacity);
+const barWidth = (page) => page.$eval('#think-bar', (n) => parseFloat(n.style.width));
+const MANY = Array.from({ length: 24 }, (_, i) => card(`k${i + 1}`, 'ReWe', `Übungsfrage ${i + 1}`, ANTWORTEN[i % ANTWORTEN.length]));
+
+/** Hält die Uhr an und holt eine frische Karte (Denkzeit beginnt bei voller Dauer). */
+async function freshCard(page) {
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.pauseAt(now + 50);
+  await page.click('#rate-known');
+  await page.waitForTimeout(100);
+}
+
+app = await startApp({ clock: true, seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'klassisch');
+  await freshCard(page);
+  check('Nur Frage zuerst', (await phase(page)) === 'denken' && (await opacity(page)) === '0' && (await label(page)) === '⏱ Denkzeit läuft · noch 5 s', `${await phase(page)} ${await opacity(page)} ${await label(page)}`);
+  const centered = await page.evaluate(() => {
+    const c = document.getElementById('flashcard').getBoundingClientRect();
+    const q = document.getElementById('card-question').getBoundingClientRect();
+    return Math.abs((q.top + q.bottom) / 2 - (c.top + c.bottom) / 2) / c.height;
+  });
+  check('Frage steht mittig', centered < 0.15, centered.toFixed(2));
+  const w0 = await barWidth(page);
+  await page.clock.runFor(2000);
+  check('Balken läuft', (await label(page)) === '⏱ Denkzeit läuft · noch 3 s' && (await barWidth(page)) < w0, `${await label(page)} ${w0} → ${await barWidth(page)}`);
+  await page.keyboard.press('t');
+  await page.clock.runFor(1000);
+  check('Tipp hält die Zeit nicht an', (await page.isVisible('#hint-box')) && (await label(page)) === '⏱ Denkzeit läuft · noch 2 s', await label(page));
+  check('Verweise erst mit Antwort', !(await page.isVisible('#card-links')));
+  await page.clock.runFor(2000);
+  check('Antwort blendet ein', (await phase(page)) === 'einblenden' && (await label(page)) === 'Antwort erscheint …', `${await phase(page)} ${await label(page)}`);
+  await page.clock.runFor(2600);
+  check('Antwort sichtbar', (await phase(page)) === 'sichtbar' && (await opacity(page)) === '1' && (await label(page)) === '', `${await phase(page)} ${await opacity(page)}`);
+
+  await freshCard(page);
+  await page.click('#flashcard');
+  check('Antippen zeigt sofort', (await phase(page)) === 'sichtbar' && (await opacity(page)) === '1', `${await phase(page)} ${await opacity(page)}`);
+
+  await freshCard(page);
+  const before = (await page.textContent('#session-text')).trim();
+  await page.click('#rate-known');
+  await page.waitForTimeout(100);
+  check('Bewerten ohne Warten', (await page.textContent('#session-text')).trim() !== before && (await phase(page)) === 'denken' && (await label(page)) === '⏱ Denkzeit läuft · noch 5 s', `${before} → ${await page.textContent('#session-text')} ${await label(page)}`);
+
+  await freshCard(page);
+  await page.clock.fastForward(9000);
+  await page.waitForTimeout(100);
+  check('Hintergrund', (await phase(page)) === 'sichtbar', await phase(page));
+
+  await freshCard(page);
+  await page.clock.runFor(3000);
+  await page.click('#tab-mehr');
+  await page.click('#tab-practice');
+  await page.waitForTimeout(100);
+  check('Reiterwechsel startet nicht neu', (await label(page)) === '⏱ Denkzeit läuft · noch 2 s', await label(page));
+  await page.click('#tab-mehr');
+  await page.click('#sync-btn');
+  await page.clock.runFor(500);
+  await page.waitForTimeout(1200);
+  await page.click('#tab-practice');
+  check('Sync startet nicht neu', ['⏱ Denkzeit läuft · noch 2 s', '⏱ Denkzeit läuft · noch 1 s'].includes(await label(page)), await label(page));
+
+  await freshCard(page);
+  await page.keyboard.press(' ');
+  check('Leertaste zeigt sofort', (await phase(page)) === 'sichtbar', await phase(page));
+
+  const values = await page.$$eval('#think-seconds option', (n) => n.map((o) => o.value).join(','));
+  check('Einstellung: Auswahl', values === '0,3,5,10,20,30' && (await page.inputValue('#think-seconds')) === '5', values);
+  await page.click('#tab-mehr');
+  await page.selectOption('#think-seconds', '0');
+  await page.click('#tab-practice');
+  await freshCard(page);
+  check('Denkzeit aus', (await phase(page)) === 'verdeckt' && !(await page.isVisible('#think-label')) && !(await page.isVisible('#card-answer')), await phase(page));
+  await page.click('#flashcard');
+  check('Denkzeit aus: Antippen zeigt', (await phase(page)) === 'sichtbar');
+  await page.reload();
+  await page.waitForTimeout(2000);
+  check('Einstellung bleibt nach Neuladen', (await page.inputValue('#think-seconds')) === '0');
+  check('Keine JavaScript-Fehler (Denkzeit)', app.errors.length === 0, app.errors.join('; '));
+} catch (e) {
+  check('Denkzeit-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
+app = await startApp({ clock: true, reducedMotion: 'reduce', seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'klassisch');
+  await freshCard(page);
+  await page.clock.runFor(5100);
+  const anim = await page.$eval('#card-answer-wrap', (n) => getComputedStyle(n).animationName);
+  check('Bewegung reduzieren', anim === 'none' && ['einblenden', 'sichtbar'].includes(await phase(page)) && (await opacity(page)) === '1', `${anim} ${await phase(page)} ${await opacity(page)}`);
+} catch (e) {
+  check('Bewegung-reduzieren-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 finish();

@@ -11,7 +11,9 @@
  *  - Tipps und Verweise ins Wissen
  */
 
-import { el, button, plural, norm } from './ui.js';
+import { el, button, plural, norm, isAnyModalOpen } from './ui.js';
+import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
+import { startThinkTimer, THINK_CHOICES, THINK_DEFAULT, FADE_MS } from './think-timer.js';
 import { renderRich, plainText } from './richtext.js';
 import {
   store,
@@ -40,6 +42,8 @@ const MAX_LINK_TERMS = 8;
 const EXTRA_NEW_STEP = 10;
 
 let bridge = null;
+let thinkTimer = null; // laufende Denkzeit der klassischen Karte
+let fadeTimer = null;
 const $ = (id) => document.getElementById(id);
 const linker = createLinker((target) => openSheet(target));
 
@@ -59,7 +63,8 @@ const pr = {
   builtFor: null,
   builtRev: -1,
   current: null, // { card, format, choice, answered, chosen }
-  flipped: false,
+  revealed: false, // klassische Karte: Antwort vollständig sichtbar
+  thinkSeconds: THINK_DEFAULT,
 };
 
 /* ------------------------------------------------------------------ */
@@ -74,6 +79,7 @@ function loadPrefs() {
     if (typeof p.fach === 'string') pr.fach = p.fach;
     if (Number.isInteger(p.newPerDay)) pr.newPerDay = Math.min(200, Math.max(0, p.newPerDay));
     if (Number.isInteger(p.sessionMax)) pr.sessionMax = Math.min(300, Math.max(5, p.sessionMax));
+    if (THINK_CHOICES.includes(p.thinkSeconds)) pr.thinkSeconds = p.thinkSeconds;
   } catch {
     /* Standardwerte */
   }
@@ -81,7 +87,7 @@ function loadPrefs() {
 
 function savePrefs() {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ mode: pr.mode, format: pr.format, fach: pr.fach, newPerDay: pr.newPerDay, sessionMax: pr.sessionMax }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ mode: pr.mode, format: pr.format, fach: pr.fach, newPerDay: pr.newPerDay, sessionMax: pr.sessionMax, thinkSeconds: pr.thinkSeconds }));
   } catch {
     /* nur Komfort */
   }
@@ -186,15 +192,21 @@ function buildFree() {
   return interleave(cards).map((c) => c.id);
 }
 
-export function startSession() {
+/**
+ * @param {{ keepCurrent?: boolean }} [o]  keepCurrent: die gerade gezeigte Karte bleibt vorne,
+ *   sofern sie noch dazugehört (z. B. Lernstand kommt nach dem Start an)
+ */
+export function startSession({ keepCurrent = false } = {}) {
+  const kept = keepCurrent && pr.current && !pr.current.answered ? pr.current : null;
   pr.queue = pr.mode === 'heute' ? buildToday() : buildFree();
+  if (kept && pr.queue.includes(kept.card.id)) pr.queue = [kept.card.id, ...pr.queue.filter((id) => id !== kept.card.id)];
   pr.index = 0;
   pr.retried = new Set();
   pr.stats = { richtig: 0, falsch: 0 };
   pr.builtFor = pr.mode === 'heute' ? today() : null;
   pr.builtRev = progressRevision();
-  pr.current = null;
-  renderPractice();
+  pr.current = kept && pr.queue[0] === kept.card.id ? kept : null;
+  renderPractice({ animate: !pr.current });
 }
 
 /** Nach Datenänderungen: gelöschte Karten entfernen, neue im freien Modus ergänzen. */
@@ -393,8 +405,8 @@ function prepareCurrent(card) {
     }
     if (!choice) format = 'classic';
   }
-  pr.current = { card, format, choice, answered: false, chosen: null };
-  pr.flipped = false;
+  pr.current = { card, format, choice, answered: false, chosen: null, thinkStart: null, shown: false };
+  pr.revealed = false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -411,6 +423,7 @@ function linkContext(card) {
 }
 
 function showEmpty(icon, title, text, actions = []) {
+  stopThinking();
   $('practice-area').hidden = true;
   const box = $('practice-empty');
   box.hidden = false;
@@ -435,34 +448,47 @@ function renderSessionBar() {
     return;
   }
   $('session-bar').hidden = false;
-  const label = pr.mode === 'heute' ? 'Heute' : 'Freies Üben';
-  const fach = pr.fach === ALL ? 'Alle Fächer' : fachLabel(pr.fach);
-  text.textContent = `${fach} · ${label}: ${doneCount} von ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
+  text.textContent = `${doneCount} / ${total} · ✓ ${pr.stats.richtig} · ✗ ${pr.stats.falsch}`;
   $('session-fill').style.width = `${Math.round((doneCount / total) * 100)}%`;
 }
 
 function updateDueBadge() {
   $('due-count').textContent = String(todayCount(pr.fach));
-  renderFachChips();
+  renderFachButton();
 }
 
-/** Fächer als Leiste: Schwerpunkt wählen, mit Anzahl (heute fällig bzw. Karten). */
-function renderFachChips() {
+/** Fächer mit Anzahl (heute fällig bzw. Karten) für Knopf und Blatt. */
+function fachOptions() {
   const cards = practicable();
   const present = new Set(cards.map((c) => toFachKey(c.fach)));
   const extra = [...present].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
   const keys = [ALL, ...FAECHER.map((f) => f.id), ...extra];
-  if (!keys.includes(pr.fach)) pr.fach = ALL;
   const count = (key) => (pr.mode === 'heute' ? todayCount(key) : cards.filter((c) => inFach(c, key)).length);
-  $('practice-fach').replaceChildren(
-    ...keys.map((key) => {
-      const chip = button(`chip${key === pr.fach ? ' is-active' : ''}${key !== ALL && !present.has(key) ? ' is-empty' : ''}`, key === ALL ? 'Alle Fächer' : fachLabel(key), () => setFach(key));
-      chip.title = key === ALL ? 'Alle Fächer gemischt' : fachName(key);
-      chip.setAttribute('aria-pressed', String(key === pr.fach));
-      chip.append(el('span', 'chip-count', String(count(key))));
-      return chip;
-    }),
-  );
+  return keys.map((key) => ({
+    key,
+    kurz: key === ALL ? 'Alle Fächer gemischt' : fachLabel(key),
+    name: key === ALL ? '' : fachName(key),
+    count: count(key),
+    empty: key !== ALL && !present.has(key),
+  }));
+}
+
+/** Fach-Knopf im Kopf; ein verschwundenes Zusatzfach fällt auf „Alle Fächer“ zurück. */
+function renderFachButton() {
+  const keys = fachOptions().map((o) => o.key);
+  if (!keys.includes(pr.fach)) pr.fach = ALL;
+  $('practice-fach-label').textContent = pr.fach === ALL ? 'Alle Fächer' : fachLabel(pr.fach);
+  $('practice-fach-btn').title = pr.fach === ALL ? 'Alle Fächer gemischt' : fachName(pr.fach);
+  refreshFachSheet();
+}
+
+function openFachChoice() {
+  openFachSheet({
+    title: pr.mode === 'heute' ? 'Fach wählen · heute fällig' : 'Fach wählen · Karten',
+    getOptions: fachOptions,
+    current: pr.fach,
+    onPick: setFach,
+  });
 }
 
 export function renderPractice({ animate = true } = {}) {
@@ -501,7 +527,10 @@ export function renderPractice({ animate = true } = {}) {
     renderDone();
     return;
   }
-  if (!pr.current || pr.current.card.id !== card.id) prepareCurrent(card);
+  if (!pr.current || pr.current.card.id !== card.id) {
+    prepareCurrent(card);
+    window.scrollTo(0, 0); // neue Karte: Frage von Anfang an sichtbar
+  }
   $('practice-empty').hidden = true;
   $('practice-area').hidden = false;
   renderCurrent(animate);
@@ -551,12 +580,20 @@ function renderDone() {
   renderSessionBar();
 }
 
+/** Angezeigter Text einer Karte (zum Erkennen echter Änderungen nach einem Sync). */
+function cardText(card) {
+  const view = bridge.view(card);
+  return `${view.frage}\u0000${view.antwort}`;
+}
+
 function renderCurrent(animate) {
   const { card, format } = pr.current;
   const view = bridge.view(card);
+  pr.current.shownText = cardText(card);
   const entry = getEntry(card.id);
   const formLabel = format === 'classic' ? 'Klassisch' : format === 'reverse' ? 'Begriff erkennen' : 'Multiple Choice';
   $('practice-progress').textContent = `${fachLabel(toFachKey(card.fach))} · ${bridge.formatNr(card.nr)} · ${entry ? `Stufe ${entry.b}` : 'Neu'} · ${formLabel}`;
+  renderTags($(format === 'classic' ? 'card-tags' : 'mc-tags'), card, formLabel);
 
   const classic = format === 'classic';
   $('card-scene').hidden = !classic;
@@ -568,11 +605,23 @@ function renderCurrent(animate) {
   $('hint-btn').setAttribute('aria-expanded', 'false');
   $('card-links').hidden = true;
   $('keyboard-hint').textContent = classic
-    ? 'Leertaste: umdrehen · T: Tipp · 1: Nochmal · 2: Gewusst'
+    ? 'Leertaste: Antwort zeigen · T: Tipp · 1: Nochmal · 2: Gewusst'
     : 'Tasten 1 bis 4: Antwort wählen · T: Tipp · Enter: weiter';
 
+  if (!classic) stopThinking();
   if (classic) renderClassic(card, view, animate);
   else renderChoice(card, animate);
+}
+
+/** Kennzeichen der Karte: Fach (nur bei „Alle Fächer“), Nummer, Stufe, Übungsform. */
+function renderTags(container, card, formLabel) {
+  const entry = getEntry(card.id);
+  const tags = [];
+  if (pr.fach === ALL) tags.push(el('span', 'tag tag-fach', fachLabel(toFachKey(card.fach))));
+  tags.push(el('span', 'tag tag-nr', bridge.formatNr(card.nr)));
+  tags.push(el('span', 'tag', entry ? `Stufe ${entry.b}` : 'Neu'));
+  tags.push(el('span', 'tag', formLabel));
+  container.replaceChildren(...tags);
 }
 
 function animateIn(node) {
@@ -584,29 +633,76 @@ function animateIn(node) {
 /* ---------- Klassisch ---------- */
 
 function renderClassic(card, view, animate) {
-  const inner = $('flashcard').firstElementChild;
-  inner.classList.add('no-transition');
-  setFlipped(false);
-  $('card-fach-front').textContent = card.fach;
-  $('card-fach-back').textContent = card.fach;
+  stopThinking();
   $('card-question').textContent = view.frage;
   $('card-answer').replaceChildren(renderRich(view.antwort, { linker, linked: new Set(), ...linkContext(card) }));
-  $('card-front').scrollTop = 0;
-  $('card-back').scrollTop = 0;
-  void inner.offsetWidth;
-  inner.classList.remove('no-transition');
+  $('card-body').scrollTop = 0;
   if (animate) animateIn($('card-scene'));
+  startThinking();
 }
 
-function setFlipped(flipped) {
-  pr.flipped = flipped;
+/**
+ * Denkzeit: erst nur die Frage mit ablaufendem Balken, dann blendet die Antwort ein.
+ * Beginn je Karte bleibt erhalten (Reiterwechsel, Sync, Hintergrund starten nicht neu).
+ */
+function startThinking() {
+  const current = pr.current;
+  if (current.shown) {
+    setPhase('sichtbar');
+    return;
+  }
+  if (!pr.thinkSeconds) {
+    setPhase('verdeckt');
+    return;
+  }
+  if (current.thinkStart === null) current.thinkStart = Date.now();
+  setPhase('denken');
+  thinkTimer = startThinkTimer({
+    startedAt: current.thinkStart,
+    seconds: pr.thinkSeconds,
+    onTick: (remaining, share) => {
+      $('think-label').textContent = `⏱ Denkzeit läuft · noch ${remaining} s`;
+      $('think-bar').style.width = `${(share * 100).toFixed(1)}%`;
+    },
+    onDone: () => {
+      thinkTimer = null;
+      // Länger weg als Denkzeit plus Einblenden: Antwort gleich ganz zeigen
+      if (Date.now() - current.thinkStart >= pr.thinkSeconds * 1000 + FADE_MS) {
+        showAnswer();
+        return;
+      }
+      setPhase('einblenden');
+      fadeTimer = setTimeout(showAnswer, FADE_MS);
+    },
+  });
+}
+
+function stopThinking() {
+  if (thinkTimer) thinkTimer.stop();
+  thinkTimer = null;
+  clearTimeout(fadeTimer);
+  fadeTimer = null;
+}
+
+/** Phasen der klassischen Karte: verdeckt (ohne Denkzeit), denken, einblenden, sichtbar. */
+function setPhase(phase) {
   const flashcard = $('flashcard');
-  flashcard.classList.toggle('is-flipped', flipped);
-  $('card-front').setAttribute('aria-hidden', String(flipped));
-  $('card-back').setAttribute('aria-hidden', String(!flipped));
-  flashcard.setAttribute('aria-label', flipped ? 'Karte zurückdrehen' : 'Karte umdrehen, Antwort zeigen');
-  $('hint-btn').hidden = flipped;
-  if (flipped) {
+  const showing = phase === 'sichtbar';
+  pr.revealed = showing;
+  flashcard.dataset.phase = phase;
+  flashcard.setAttribute('aria-label', showing ? 'Antwort wird angezeigt' : 'Antwort zeigen');
+  $('card-answer-wrap').setAttribute('aria-hidden', String(phase === 'verdeckt' || phase === 'denken'));
+  const thinking = phase === 'denken' || phase === 'einblenden';
+  $('think-track').hidden = !thinking;
+  $('think-label').hidden = !pr.thinkSeconds;
+  if (phase === 'denken') $('think-bar').style.width = '100%';
+  if (phase === 'einblenden') {
+    $('think-bar').style.width = '0%';
+    $('think-label').textContent = 'Antwort erscheint …';
+  }
+  if (phase === 'sichtbar' || phase === 'verdeckt') $('think-label').textContent = '';
+  $('hint-btn').hidden = showing;
+  if (showing) {
     $('hint-box').hidden = true;
     renderCardLinks(pr.current.card);
   } else {
@@ -614,16 +710,23 @@ function setFlipped(flipped) {
   }
 }
 
-function flipCard() {
+function showAnswer() {
   if (!pr.current || pr.current.format !== 'classic') return;
-  setFlipped(!pr.flipped);
+  stopThinking();
+  pr.current.shown = true;
+  setPhase('sichtbar');
+}
+
+/** Antippen, Leertaste oder Enter: Antwort sofort zeigen. */
+function revealAnswer() {
+  if (!pr.current || pr.current.format !== 'classic' || pr.revealed) return;
+  showAnswer();
 }
 
 /* ---------- Auswahl (Multiple Choice / Begriff erkennen) ---------- */
 
 function renderChoice(card, animate) {
   const { choice } = pr.current;
-  $('mc-fach').textContent = card.fach;
   $('mc-label').textContent = choice.label;
   const prompt = $('mc-prompt');
   prompt.textContent = choice.prompt;
@@ -636,6 +739,8 @@ function renderChoice(card, animate) {
       return option;
     }),
   );
+  $('mc-area').classList.remove('is-answered');
+  $('mc-more').hidden = true;
   $('mc-feedback').hidden = true;
   $('mc-explain').hidden = true;
   if (animate) animateIn($('mc-area'));
@@ -647,15 +752,27 @@ function answerChoice(index) {
   current.answered = true;
   current.chosen = index;
   const correct = index === current.choice.correct;
+  // Zum Nachlesen: größere Schrift, nur gewählte und richtige Antwort bleiben stehen
+  let collapsed = 0;
   [...$('mc-options').children].forEach((node, i) => {
     node.disabled = true;
     if (i === current.choice.correct) node.classList.add('is-correct');
     else if (i === index) node.classList.add('is-wrong');
+    else {
+      node.classList.add('is-collapsed');
+      collapsed += 1;
+    }
   });
+  $('mc-area').classList.add('is-answered');
+  $('mc-more').textContent = `${plural(collapsed, 'weitere Antwort', 'weitere Antworten')} ausgeblendet ▾`;
+  $('mc-more').hidden = collapsed === 0;
+  const { before, after } = grade(current.card, correct, { advance: false });
   const feedback = $('mc-feedback');
   feedback.hidden = false;
   feedback.dataset.result = correct ? 'richtig' : 'falsch';
-  feedback.textContent = correct ? '✓ Richtig!' : '✗ Leider falsch. Die richtige Antwort ist markiert.';
+  const text = el('div', 'feedback-body');
+  text.append(el('span', 'feedback-title', correct ? 'Richtig!' : 'Leider falsch'), el('span', 'feedback-sub', feedbackSub(before, after, correct)));
+  feedback.replaceChildren(el('span', 'feedback-emoji', correct ? '👍' : '👎'), text);
 
   // Vollständige Antwort mit Verweisen zum Nachlesen
   const view = bridge.view(current.card);
@@ -667,7 +784,27 @@ function answerChoice(index) {
   renderCardLinks(current.card);
   $('mc-next').hidden = false;
   $('mc-next').focus({ preventScroll: true });
-  grade(current.card, correct, { advance: false });
+}
+
+/** Wann eine Karte wieder fällig ist, in Worten. */
+function when(day) {
+  const now = today();
+  if (day <= now) return 'heute';
+  if (day === addDays(now, 1)) return 'morgen';
+  const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${now}T00:00:00Z`)) / 86400000);
+  return `in ${days} Tagen`;
+}
+
+/** Zeile unter „Richtig!“ bzw. „Leider falsch“ (Stufe und nächste Fälligkeit). */
+function feedbackSub(before, after, correct) {
+  if (!correct) return `Richtige Antwort grün markiert · kommt ${when(after.f)} wieder`;
+  const rose = !before || after.b > before.b;
+  return `${rose ? 'Weiter in' : 'Bleibt in'} Stufe ${after.b} · wieder fällig ${when(after.f)}`;
+}
+
+function showAllOptions() {
+  $('mc-options').querySelectorAll('.is-collapsed').forEach((node) => node.classList.remove('is-collapsed'));
+  $('mc-more').hidden = true;
 }
 
 function nextCard() {
@@ -681,7 +818,8 @@ function nextCard() {
 
 /** Speichert die Antwort im Lernstand; falsche Karten kommen am Ende der Sitzung noch einmal. */
 function grade(card, correct, { advance }) {
-  record(card.id, correct);
+  const before = getEntry(card.id);
+  const after = record(card.id, correct);
   pr.stats[correct ? 'richtig' : 'falsch'] += 1;
   if (!correct && !pr.retried.has(card.id)) {
     pr.retried.add(card.id);
@@ -696,11 +834,26 @@ function grade(card, correct, { advance }) {
     renderPractice();
     if (!$('practice-area').hidden && pr.current && pr.current.format === 'classic') $('flashcard').focus({ preventScroll: true });
   }
+  return { before, after };
+}
+
+let flashTimer = null;
+
+/** Kurzes 👍/👎 über der Karte nach „Gewusst“/„Nochmal“; die nächste Karte steht schon da. */
+function flash(known) {
+  const node = $('practice-flash');
+  node.textContent = known ? '👍' : '👎';
+  node.classList.remove('is-on');
+  void node.offsetWidth;
+  node.classList.add('is-on');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => node.classList.remove('is-on'), 700);
 }
 
 function rateClassic(known) {
   if (!pr.current || pr.current.format !== 'classic') return;
   grade(pr.current.card, known, { advance: true });
+  flash(known);
 }
 
 /* ------------------------------------------------------------------ */
@@ -709,7 +862,7 @@ function rateClassic(known) {
 
 function showHint() {
   const current = pr.current;
-  if (!current || current.answered || pr.flipped) return;
+  if (!current || current.answered || pr.revealed) return;
   const box = $('hint-box');
   if (!box.hidden) {
     box.hidden = true;
@@ -795,7 +948,7 @@ function setTheme(theme) {
 
 /** Fach- und Themenfilter für „Freies Üben“. */
 export function renderFilters() {
-  renderFachChips();
+  renderFachButton();
   const counts = new Map();
   for (const card of practicable()) {
     if (!inFach(card)) continue;
@@ -827,18 +980,25 @@ export function refreshPractice() {
   const untouched = pr.index === 0 && pr.stats.richtig + pr.stats.falsch === 0;
   const freshProgress = pr.mode === 'heute' && untouched && pr.builtRev !== progressRevision();
   if ((pr.mode === 'heute' && pr.builtFor !== today()) || (!pr.queue.length && practicable().length) || freshProgress) {
-    startSession();
+    startSession({ keepCurrent: freshProgress });
     return;
   }
   reconcile();
-  const keepFlip = pr.flipped && pr.current && pr.current.format === 'classic';
+
+  // Gleiche Karte mit gleichem Text (z. B. nach dem Speichern im Hintergrund): nicht neu zeichnen,
+  // damit ein offener Tipp, die Denkzeit und das Einblenden ungestört weiterlaufen
+  if (pr.current && pr.current.shownText === cardText(pr.current.card)) {
+    renderSessionBar();
+    updateDueBadge();
+    return;
+  }
+
   if (pr.current && pr.current.answered) {
     renderSessionBar();
     updateDueBadge();
     return; // Erklärung nach einer Auswahlfrage stehen lassen
   }
   renderPractice({ animate: false });
-  if (keepFlip && pr.current) setFlipped(true);
 }
 
 /* ------------------------------------------------------------------ */
@@ -847,7 +1007,7 @@ export function refreshPractice() {
 
 /** Tastenkürzel beim Üben; liefert true, wenn die Taste verarbeitet wurde. */
 export function handlePracticeKey(event) {
-  if ($('practice-area').hidden || !pr.current) return false;
+  if (isAnyModalOpen() || $('practice-area').hidden || !pr.current) return false;
   const onControl = event.target instanceof HTMLElement && event.target.closest('button, a, select') !== null;
   const key = event.key;
   if (key === 't' || key === 'T') {
@@ -856,7 +1016,7 @@ export function handlePracticeKey(event) {
   }
   if (pr.current.format === 'classic') {
     if ((key === ' ' || key === 'Enter') && !onControl) {
-      flipCard();
+      revealAnswer();
       return true;
     }
     if (key === '1' || key === 'ArrowLeft') {
@@ -920,9 +1080,17 @@ export function initPractice(b) {
       renderPractice();
     }
   });
+  $('practice-fach-btn').addEventListener('click', openFachChoice);
   $('practice-theme').addEventListener('change', (event) => setTheme(event.target.value));
   $('shuffle-btn').addEventListener('click', startSession);
-  $('flashcard').addEventListener('click', flipCard);
+  $('flashcard').addEventListener('click', revealAnswer);
+  $('mc-more').addEventListener('click', showAllOptions);
+  $('think-seconds').value = String(pr.thinkSeconds);
+  $('think-seconds').addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    pr.thinkSeconds = THINK_CHOICES.includes(value) ? value : THINK_DEFAULT;
+    savePrefs();
+  });
   $('rate-again').addEventListener('click', () => rateClassic(false));
   $('rate-known').addEventListener('click', () => rateClassic(true));
   $('mc-next').addEventListener('click', nextCard);

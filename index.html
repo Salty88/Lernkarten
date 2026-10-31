@@ -16,14 +16,22 @@
   <main class="container">
     <!-- ============ Üben ============ -->
     <section class="view" id="view-practice" role="tabpanel" aria-labelledby="tab-practice">
-      <div class="practice-top">
-        <div class="segmented" id="practice-mode" role="tablist" aria-label="Übungsart">
-          <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute fällig <span class="chip-count" id="due-count"></span></button>
-          <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Freies Üben</button>
+      <div class="practice-sticky">
+        <div class="practice-head">
+          <button class="fach-btn" id="practice-fach-btn" type="button" aria-haspopup="dialog">
+            <span class="fach-dot" aria-hidden="true"></span><span id="practice-fach-label">Alle Fächer</span><span class="fach-caret" aria-hidden="true">▼</span>
+          </button>
+          <div class="segmented segmented-compact" id="practice-mode" role="tablist" aria-label="Übungsart">
+            <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="heute">Heute <span class="chip-count" id="due-count"></span></button>
+            <button class="seg" type="button" role="tab" aria-selected="false" data-mode="frei">Frei</button>
+          </div>
+        </div>
+        <div class="session-bar" id="session-bar" hidden>
+          <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
+          <p class="session-text" id="session-text"></p>
+          <button class="btn btn-primary mc-next" id="mc-next" type="button" hidden>Weiter ›</button>
         </div>
       </div>
-
-      <div class="chips chips-scroll practice-fach" id="practice-fach" role="toolbar" aria-label="Fach wählen"></div>
 
       <div class="toolbar" id="free-toolbar" hidden>
         <label class="visually-hidden" for="practice-theme">Thema filtern</label>
@@ -31,54 +39,53 @@
         <button class="btn btn-secondary" id="shuffle-btn" type="button">🔀 Mischen</button>
       </div>
 
-      <div class="session-bar" id="session-bar" hidden>
-        <p class="session-text" id="session-text"></p>
-        <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
-      </div>
-
       <div class="practice-area" id="practice-area">
-        <p class="progress" id="practice-progress" aria-live="polite"></p>
+        <p class="visually-hidden" id="practice-progress" aria-live="polite"></p>
+        <div class="practice-flash" id="practice-flash" aria-hidden="true"></div>
 
         <div class="card-scene" id="card-scene">
-          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Karte umdrehen">
-            <div class="flashcard-inner">
-              <div class="flashcard-face flashcard-front" id="card-front">
-                <span class="badge" id="card-fach-front"></span>
-                <span class="face-label">Frage</span>
-                <p class="face-text" id="card-question"></p>
-                <span class="face-hint">Tippen zum Umdrehen</span>
-              </div>
-              <div class="flashcard-face flashcard-back" id="card-back" aria-hidden="true">
-                <span class="badge badge-on-accent" id="card-fach-back"></span>
+          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Antwort zeigen" data-phase="verdeckt">
+            <div class="card-tags" id="card-tags"></div>
+            <div class="card-body" id="card-body">
+              <span class="face-label">Frage</span>
+              <p class="face-text card-question" id="card-question"></p>
+              <div class="card-answer-wrap" id="card-answer-wrap">
                 <span class="face-label">Antwort</span>
-                <div class="face-text face-rich" id="card-answer"></div>
+                <div class="face-text face-rich card-answer" id="card-answer"></div>
               </div>
+            </div>
+            <span class="face-hint" id="card-tap-hint">Tippen zeigt die Antwort</span>
+          </div>
+          <div class="think" id="think">
+            <div class="think-track" id="think-track" aria-hidden="true"><div class="think-bar" id="think-bar"></div></div>
+            <div class="think-row">
+              <span class="think-label" id="think-label" aria-live="off"></span>
+              <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
             </div>
           </div>
         </div>
 
         <div class="mc" id="mc-area" hidden>
           <div class="mc-question">
-            <span class="badge" id="mc-fach"></span>
+            <div class="card-tags" id="mc-tags"></div>
             <span class="face-label" id="mc-label"></span>
             <p class="mc-prompt" id="mc-prompt"></p>
           </div>
+          <div class="mc-feedback feedback" id="mc-feedback" role="status" hidden></div>
           <div class="mc-options" id="mc-options"></div>
-          <p class="mc-feedback" id="mc-feedback" role="status" hidden></p>
+          <button class="mc-more" id="mc-more" type="button" hidden></button>
           <div class="mc-explain" id="mc-explain" hidden></div>
         </div>
 
         <div class="practice-help">
-          <button class="btn btn-small btn-secondary" id="hint-btn" type="button" aria-expanded="false" aria-controls="hint-box">💡 Tipp</button>
           <div class="hint-box" id="hint-box" hidden></div>
           <div class="card-links" id="card-links" hidden></div>
         </div>
 
         <div class="rate-buttons" id="rate-buttons">
-          <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
-          <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
+          <button class="btn btn-again" id="rate-again" type="button">👎 Nochmal</button>
+          <button class="btn btn-known" id="rate-known" type="button">👍 Gewusst</button>
         </div>
-        <button class="btn btn-primary mc-next" id="mc-next" type="button" hidden>Weiter ›</button>
         <p class="keyboard-hint" id="keyboard-hint"></p>
       </div>
 
@@ -189,6 +196,18 @@
             <option value="gemischt">Gemischt</option>
             <option value="mc">Multiple Choice</option>
             <option value="klassisch">Klassisch</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <span class="settings-icon" aria-hidden="true">⏱</span>
+          <label class="settings-text" for="think-seconds"><span class="settings-label">Denkzeit</span><span class="settings-sub">Lernkarte: Antwort erscheint nach</span></label>
+          <select class="select select-compact" id="think-seconds">
+            <option value="0">aus</option>
+            <option value="3">3 s</option>
+            <option value="5">5 s</option>
+            <option value="10">10 s</option>
+            <option value="20">20 s</option>
+            <option value="30">30 s</option>
           </select>
         </div>
         <details class="settings-details" id="plan-settings">
@@ -390,6 +409,14 @@
   </div>
 
   <!-- ============ Toast ============ -->
+  <div class="modal-backdrop sheet-backdrop" id="fach-sheet" hidden>
+    <div class="modal sheet" role="dialog" aria-modal="true" aria-labelledby="fach-sheet-title">
+      <span class="sheet-grip" aria-hidden="true"></span>
+      <h2 class="sheet-title" id="fach-sheet-title">Fach wählen</h2>
+      <div class="sheet-list" id="fach-sheet-list"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span class="toast-text" id="toast-text"></span>
     <button class="toast-action" id="toast-action" type="button" hidden></button>

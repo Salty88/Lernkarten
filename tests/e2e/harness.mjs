@@ -89,6 +89,8 @@ async function waitForServer(port) {
  * @param {'light'|'dark'} [o.colorScheme]
  * @param {object|null} [o.settings] gespeicherte Einstellungen; null = erster Start
  * @param {number} [o.wait]         Wartezeit nach dem Laden in ms
+ * @param {boolean} [o.clock]       simulierte Uhr (page.clock) vor dem Laden einrichten
+ * @param {'reduce'} [o.reducedMotion] Systemeinstellung „Bewegung reduzieren“
  * @returns {Promise<{page, repo, errors: string[], url: string, close: Function}>}
  */
 export async function startApp(o = {}) {
@@ -99,7 +101,7 @@ export async function startApp(o = {}) {
   const browser = await chromium.launch({ executablePath: CHROMIUM });
   const viewport = o.viewport || PHONE;
   const mobile = viewport.width < 500;
-  const context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, colorScheme: o.colorScheme || 'light' });
+  const context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, colorScheme: o.colorScheme || 'light', reducedMotion: o.reducedMotion || 'no-preference' });
   const settings = o.settings === undefined ? DEFAULT_SETTINGS : o.settings;
   if (settings) {
     await context.addInitScript((s) => {
@@ -117,9 +119,11 @@ export async function startApp(o = {}) {
   });
   page.on('pageerror', (e) => errors.push(`PAGEERROR ${e.message}`));
   await page.route('https://api.github.com/**', repo.handler);
+  if (o.clock) await page.clock.install();
   const url = `http://127.0.0.1:${port}/`;
   await page.goto(url);
   await page.waitForTimeout(o.wait ?? 2500);
+  if (o.clock) await page.clock.runFor(o.wait ?? 2500);
   return {
     page,
     repo,

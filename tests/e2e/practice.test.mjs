@@ -377,4 +377,22 @@ try {
   await app.close();
 }
 
+/* ---------- Task 5: Freies Üben ---------- */
+app = await startApp({ seed: seedWith(MANY) });
+try {
+  const { page } = app;
+  await setFormat(page, 'klassisch');
+  check('Thema-Filter verborgen in Heute', !(await page.isVisible('#free-toolbar')));
+  await page.click('#practice-mode [data-mode="frei"]');
+  await page.waitForTimeout(300);
+  const nt = await navTop(page);
+  const f = await page.evaluate(() => ({ tb: document.getElementById('free-toolbar').getBoundingClientRect().bottom, y: scrollY, rate: document.getElementById('rate-buttons').getBoundingClientRect().bottom, card: document.getElementById('card-scene').getBoundingClientRect().height, h: innerHeight }));
+  check('Thema-Filter erreichbar', (await page.isVisible('#shuffle-btn')) && f.tb < nt, JSON.stringify(f));
+  check('Frei ohne Scrollen', f.y === 0 && f.rate <= nt && f.card >= 0.4 * f.h, JSON.stringify({ ...f, nt }));
+} catch (e) {
+  check('Frei-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 finish();

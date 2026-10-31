@@ -97,4 +97,123 @@ try {
   await app.close();
 }
 
+/* ---------- Task 2: Karte, Nachlesen, Weiter oben rechts ---------- */
+const ANTWORTEN = [
+  'Gegenüberstellung von Vermögen und Kapital zum Stichtag.',
+  'Verteilung des Wertverzehrs auf die Nutzungsjahre.',
+  'Erlöse abzüglich variabler Kosten je Stück.',
+  'Menge, ab der beide Alternativen gleich viel kosten.',
+  'Kosten, die unabhängig von der Ausbringung anfallen.',
+  'Kosten, die sich mit der Ausbringung verändern.',
+  'Verzinsung des durchschnittlich gebundenen Kapitals.',
+  'Summe aller Erträge abzüglich aller Aufwendungen.',
+];
+const REWE = ANTWORTEN.map((a, i) => card(`k${i + 1}`, 'ReWe', `Frage Nummer ${i + 1}: Was beschreibt diesen Begriff?`, a));
+const LONG = 'Langer Text mit vielen Wörtern, damit die Antwort über mehrere Zeilen läuft und auf einem kleinen Handy wirklich Platz braucht; ';
+const LONGCARDS = Array.from({ length: 6 }, (_, i) => card(`k${i + 1}`, 'ReWe', (i ? `Kurze Frage ${i}` : LONG.repeat(3).slice(0, 300)), `${i} ${LONG.repeat(2)}`.slice(0, 190)));
+
+async function setFormat(page, value) {
+  await page.click('#tab-mehr');
+  await page.selectOption('#practice-format', value);
+  await page.click('#tab-practice');
+  await page.waitForTimeout(300);
+}
+
+/** Beantwortet die aktuelle Auswahlfrage richtig oder falsch (Antworttext aus den Daten). */
+async function answer(page, cards, correct) {
+  const prompt = (await page.textContent('#mc-prompt')).trim();
+  const right = cards.find((c) => c.frage === prompt)?.antwort.slice(0, 40);
+  const texts = await page.$$eval('#mc-options .mc-text', (n) => n.map((x) => x.textContent));
+  const index = texts.findIndex((t) => (t.slice(0, 40) === right) === correct);
+  await page.click(`#mc-options .mc-option >> nth=${index}`);
+  await page.waitForTimeout(250);
+}
+
+const navTop = (page) => page.evaluate(() => document.querySelector('.bottom-nav').getBoundingClientRect().top);
+
+async function weiterOben(page, label) {
+  const at = async () => page.evaluate(() => {
+    const b = document.getElementById('mc-next');
+    const r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { visible: !b.hidden && r.width > 0, right: r.right / innerWidth, top: r.top, hits: hit === b || b.contains(hit) };
+  });
+  const a = await at();
+  await page.evaluate(() => window.scrollTo(0, 1e6));
+  await page.waitForTimeout(150);
+  const b = await at();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const below = await page.evaluate(() => {
+    const opts = document.getElementById('mc-options').getBoundingClientRect().bottom;
+    return [...document.querySelectorAll('#practice-area button')].filter((n) => /Weiter/.test(n.textContent) && n.getBoundingClientRect().top > opts && n.offsetParent).length;
+  });
+  check(`Weiter oben rechts ${label}`, a.visible && a.right > 0.6 && a.top < 160 && b.visible && b.right > 0.6 && b.top < 160 && b.hits && below === 0, JSON.stringify({ a, b, below }));
+}
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 375, height: 667 }]) {
+  const tag = `${viewport.width}×${viewport.height}`;
+  app = await startApp({ viewport, seed: seedWith(REWE) });
+  try {
+    const { page } = app;
+    await setFormat(page, 'klassisch');
+    const tags = await page.$$eval('#card-tags .tag', (n) => n.map((x) => x.textContent.trim()));
+    check(`Kennzeichen ${tag}`, tags.some((t) => /^#\d{4}$/.test(t)) && tags.includes('Neu') && tags.includes('Klassisch') && tags.includes('ReWe'), tags.join(' | '));
+    await pick(page, 'rewe');
+    const tags2 = await page.$$eval('#card-tags .tag', (n) => n.map((x) => x.textContent.trim()));
+    check(`Kein Fach-Kennzeichen bei gewähltem Fach ${tag}`, !tags2.includes('ReWe') && tags2.includes('Klassisch'), tags2.join(' | '));
+    check(`Eine Fläche ${tag}`, (await page.locator('#card-back').count()) === 0);
+    const layout = await page.evaluate(() => ({ y: scrollY, rate: document.getElementById('rate-buttons').getBoundingClientRect().bottom, card: document.getElementById('flashcard').getBoundingClientRect().height, h: innerHeight }));
+    const nt = await navTop(page);
+    check(`Klassisch ohne Scrollen ${tag}`, layout.y === 0 && layout.rate <= nt && layout.rate >= nt - 90, JSON.stringify({ ...layout, nt }));
+    check(`Karte füllt den Platz ${tag}`, viewport.height === 844 ? layout.card >= 0.45 * layout.h : layout.card >= 220, JSON.stringify(layout));
+    await page.click('#flashcard');
+    await page.waitForTimeout(300);
+    check(`Frage und Antwort zusammen ${tag}`, (await page.isVisible('#card-question')) && (await page.isVisible('#card-answer')));
+    check(`Beschriftung ${tag}`, (await page.textContent('#rate-again')).trim() === '👎 Nochmal' && (await page.textContent('#rate-known')).trim() === '👍 Gewusst' && (await page.textContent('#mc-next')).trim() === 'Weiter ›');
+
+    await setFormat(page, 'mc');
+    if (viewport.height === 844) {
+      const fits = await page.evaluate(() => [...document.querySelectorAll('#mc-options .mc-option')].every((o) => o.getBoundingClientRect().bottom <= document.querySelector('.bottom-nav').getBoundingClientRect().top));
+      check('Vor der Antwort passt alles', fits);
+    }
+    const gap = await page.evaluate(() => document.getElementById('mc-label').getBoundingClientRect().top - document.getElementById('mc-tags').getBoundingClientRect().bottom);
+    check(`Kennzeichen überlappen nicht ${tag}`, gap >= 6, String(gap));
+    const sizeBefore = await page.$eval('.mc-option', (n) => parseFloat(getComputedStyle(n).fontSize));
+    await answer(page, REWE, false);
+    const after = await page.evaluate(() => ({ size: parseFloat(getComputedStyle(document.querySelector('.mc-option')).fontSize), shown: [...document.querySelectorAll('.mc-option')].filter((o) => o.offsetParent).length, more: document.getElementById('mc-more').textContent.trim() }));
+    check(`Nachlesen größer ${tag}`, after.size > sizeBefore && after.shown === 2 && after.more === '2 weitere Antworten ausgeblendet ▾', JSON.stringify({ sizeBefore, ...after }));
+    await weiterOben(page, tag);
+    await page.click('#mc-more');
+    check(`Aufklappen zeigt alle ${tag}`, (await page.$$eval('.mc-option', (n) => n.filter((o) => o.offsetParent).length)) === 4);
+    await page.click('#mc-next');
+    await page.waitForTimeout(250);
+    await answer(page, REWE, true);
+    const right = await page.evaluate(() => ({ shown: [...document.querySelectorAll('.mc-option')].filter((o) => o.offsetParent).length, more: document.getElementById('mc-more').textContent.trim() }));
+    check(`Richtig: nur eine sichtbar ${tag}`, right.shown === 1 && right.more === '3 weitere Antworten ausgeblendet ▾', JSON.stringify(right));
+    check(`Keine JavaScript-Fehler (Karte) ${tag}`, app.errors.length === 0, app.errors.join('; '));
+  } catch (e) {
+    check(`Karten-Test ${tag} lief ohne Abbruch`, false, e.message.split('\n')[0]);
+  } finally {
+    await app.close();
+  }
+}
+
+// Lange Texte auf kleinem Handy
+app = await startApp({ viewport: { width: 375, height: 667 }, seed: seedWith(LONGCARDS) });
+try {
+  const { page } = app;
+  await setFormat(page, 'klassisch');
+  const nt = await navTop(page);
+  const l = await page.evaluate(() => ({ y: scrollY, rate: document.getElementById('rate-buttons').getBoundingClientRect().bottom, w: document.documentElement.scrollWidth }));
+  check('Lange Texte: Klassisch ohne Scrollen', l.y === 0 && l.rate <= nt && l.w <= 375, JSON.stringify({ ...l, nt }));
+  await setFormat(page, 'mc');
+  await answer(page, LONGCARDS, false);
+  await weiterOben(page, 'lange Texte');
+  check('Lange Texte: kein seitliches Scrollen', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 375);
+} catch (e) {
+  check('Lange-Texte-Test lief ohne Abbruch', false, e.message.split('\n')[0]);
+} finally {
+  await app.close();
+}
+
 finish();

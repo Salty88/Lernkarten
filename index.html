@@ -29,6 +29,7 @@
         <div class="session-bar" id="session-bar" hidden>
           <div class="session-track" aria-hidden="true"><div class="session-fill" id="session-fill"></div></div>
           <p class="session-text" id="session-text"></p>
+          <button class="btn btn-primary mc-next" id="mc-next" type="button" hidden>Weiter ›</button>
         </div>
       </div>
 
@@ -39,33 +40,31 @@
       </div>
 
       <div class="practice-area" id="practice-area">
-        <p class="progress" id="practice-progress" aria-live="polite"></p>
+        <p class="visually-hidden" id="practice-progress" aria-live="polite"></p>
 
         <div class="card-scene" id="card-scene">
-          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Karte umdrehen">
-            <div class="flashcard-inner">
-              <div class="flashcard-face flashcard-front" id="card-front">
-                <span class="badge" id="card-fach-front"></span>
-                <span class="face-label">Frage</span>
-                <p class="face-text" id="card-question"></p>
-                <span class="face-hint">Tippen zum Umdrehen</span>
-              </div>
-              <div class="flashcard-face flashcard-back" id="card-back" aria-hidden="true">
-                <span class="badge badge-on-accent" id="card-fach-back"></span>
+          <div class="flashcard" id="flashcard" role="button" tabindex="0" aria-label="Antwort zeigen" data-phase="verdeckt">
+            <div class="card-tags" id="card-tags"></div>
+            <div class="card-body" id="card-body">
+              <span class="face-label">Frage</span>
+              <p class="face-text card-question" id="card-question"></p>
+              <div class="card-answer-wrap" id="card-answer-wrap">
                 <span class="face-label">Antwort</span>
-                <div class="face-text face-rich" id="card-answer"></div>
+                <div class="face-text face-rich card-answer" id="card-answer"></div>
               </div>
             </div>
+            <span class="face-hint" id="card-tap-hint">Tippen zeigt die Antwort</span>
           </div>
         </div>
 
         <div class="mc" id="mc-area" hidden>
           <div class="mc-question">
-            <span class="badge" id="mc-fach"></span>
+            <div class="card-tags" id="mc-tags"></div>
             <span class="face-label" id="mc-label"></span>
             <p class="mc-prompt" id="mc-prompt"></p>
           </div>
           <div class="mc-options" id="mc-options"></div>
+          <button class="mc-more" id="mc-more" type="button" hidden></button>
           <p class="mc-feedback" id="mc-feedback" role="status" hidden></p>
           <div class="mc-explain" id="mc-explain" hidden></div>
         </div>
@@ -77,10 +76,9 @@
         </div>
 
         <div class="rate-buttons" id="rate-buttons">
-          <button class="btn btn-again" id="rate-again" type="button">↺ Nochmal</button>
-          <button class="btn btn-known" id="rate-known" type="button">✓ Gewusst</button>
+          <button class="btn btn-again" id="rate-again" type="button">👎 Nochmal</button>
+          <button class="btn btn-known" id="rate-known" type="button">👍 Gewusst</button>
         </div>
-        <button class="btn btn-primary mc-next" id="mc-next" type="button" hidden>Weiter ›</button>
         <p class="keyboard-hint" id="keyboard-hint"></p>
       </div>
 

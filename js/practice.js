@@ -60,7 +60,7 @@ const pr = {
   builtFor: null,
   builtRev: -1,
   current: null, // { card, format, choice, answered, chosen }
-  flipped: false,
+  revealed: false, // klassische Karte: Antwort sichtbar
 };
 
 /* ------------------------------------------------------------------ */
@@ -395,7 +395,7 @@ function prepareCurrent(card) {
     if (!choice) format = 'classic';
   }
   pr.current = { card, format, choice, answered: false, chosen: null };
-  pr.flipped = false;
+  pr.revealed = false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -571,6 +571,7 @@ function renderCurrent(animate) {
   const entry = getEntry(card.id);
   const formLabel = format === 'classic' ? 'Klassisch' : format === 'reverse' ? 'Begriff erkennen' : 'Multiple Choice';
   $('practice-progress').textContent = `${fachLabel(toFachKey(card.fach))} · ${bridge.formatNr(card.nr)} · ${entry ? `Stufe ${entry.b}` : 'Neu'} · ${formLabel}`;
+  renderTags($(format === 'classic' ? 'card-tags' : 'mc-tags'), card, formLabel);
 
   const classic = format === 'classic';
   $('card-scene').hidden = !classic;
@@ -582,11 +583,22 @@ function renderCurrent(animate) {
   $('hint-btn').setAttribute('aria-expanded', 'false');
   $('card-links').hidden = true;
   $('keyboard-hint').textContent = classic
-    ? 'Leertaste: umdrehen · T: Tipp · 1: Nochmal · 2: Gewusst'
+    ? 'Leertaste: Antwort zeigen · T: Tipp · 1: Nochmal · 2: Gewusst'
     : 'Tasten 1 bis 4: Antwort wählen · T: Tipp · Enter: weiter';
 
   if (classic) renderClassic(card, view, animate);
   else renderChoice(card, animate);
+}
+
+/** Kennzeichen der Karte: Fach (nur bei „Alle Fächer“), Nummer, Stufe, Übungsform. */
+function renderTags(container, card, formLabel) {
+  const entry = getEntry(card.id);
+  const tags = [];
+  if (pr.fach === ALL) tags.push(el('span', 'tag tag-fach', fachLabel(toFachKey(card.fach))));
+  tags.push(el('span', 'tag tag-nr', bridge.formatNr(card.nr)));
+  tags.push(el('span', 'tag', entry ? `Stufe ${entry.b}` : 'Neu'));
+  tags.push(el('span', 'tag', formLabel));
+  container.replaceChildren(...tags);
 }
 
 function animateIn(node) {
@@ -598,29 +610,22 @@ function animateIn(node) {
 /* ---------- Klassisch ---------- */
 
 function renderClassic(card, view, animate) {
-  const inner = $('flashcard').firstElementChild;
-  inner.classList.add('no-transition');
-  setFlipped(false);
-  $('card-fach-front').textContent = card.fach;
-  $('card-fach-back').textContent = card.fach;
+  setRevealed(false);
   $('card-question').textContent = view.frage;
   $('card-answer').replaceChildren(renderRich(view.antwort, { linker, linked: new Set(), ...linkContext(card) }));
-  $('card-front').scrollTop = 0;
-  $('card-back').scrollTop = 0;
-  void inner.offsetWidth;
-  inner.classList.remove('no-transition');
+  $('card-body').scrollTop = 0;
   if (animate) animateIn($('card-scene'));
 }
 
-function setFlipped(flipped) {
-  pr.flipped = flipped;
+/** Zeigt oder verbirgt die Antwort der klassischen Karte (Frage bleibt stehen). */
+function setRevealed(revealed) {
+  pr.revealed = revealed;
   const flashcard = $('flashcard');
-  flashcard.classList.toggle('is-flipped', flipped);
-  $('card-front').setAttribute('aria-hidden', String(flipped));
-  $('card-back').setAttribute('aria-hidden', String(!flipped));
-  flashcard.setAttribute('aria-label', flipped ? 'Karte zurückdrehen' : 'Karte umdrehen, Antwort zeigen');
-  $('hint-btn').hidden = flipped;
-  if (flipped) {
+  flashcard.dataset.phase = revealed ? 'sichtbar' : 'verdeckt';
+  flashcard.setAttribute('aria-label', revealed ? 'Antwort wird angezeigt' : 'Antwort zeigen');
+  $('card-answer-wrap').setAttribute('aria-hidden', String(!revealed));
+  $('hint-btn').hidden = revealed;
+  if (revealed) {
     $('hint-box').hidden = true;
     renderCardLinks(pr.current.card);
   } else {
@@ -628,16 +633,15 @@ function setFlipped(flipped) {
   }
 }
 
-function flipCard() {
-  if (!pr.current || pr.current.format !== 'classic') return;
-  setFlipped(!pr.flipped);
+function revealAnswer() {
+  if (!pr.current || pr.current.format !== 'classic' || pr.revealed) return;
+  setRevealed(true);
 }
 
 /* ---------- Auswahl (Multiple Choice / Begriff erkennen) ---------- */
 
 function renderChoice(card, animate) {
   const { choice } = pr.current;
-  $('mc-fach').textContent = card.fach;
   $('mc-label').textContent = choice.label;
   const prompt = $('mc-prompt');
   prompt.textContent = choice.prompt;
@@ -650,6 +654,8 @@ function renderChoice(card, animate) {
       return option;
     }),
   );
+  $('mc-area').classList.remove('is-answered');
+  $('mc-more').hidden = true;
   $('mc-feedback').hidden = true;
   $('mc-explain').hidden = true;
   if (animate) animateIn($('mc-area'));
@@ -661,11 +667,20 @@ function answerChoice(index) {
   current.answered = true;
   current.chosen = index;
   const correct = index === current.choice.correct;
+  // Zum Nachlesen: größere Schrift, nur gewählte und richtige Antwort bleiben stehen
+  let collapsed = 0;
   [...$('mc-options').children].forEach((node, i) => {
     node.disabled = true;
     if (i === current.choice.correct) node.classList.add('is-correct');
     else if (i === index) node.classList.add('is-wrong');
+    else {
+      node.classList.add('is-collapsed');
+      collapsed += 1;
+    }
   });
+  $('mc-area').classList.add('is-answered');
+  $('mc-more').textContent = `${plural(collapsed, 'weitere Antwort', 'weitere Antworten')} ausgeblendet ▾`;
+  $('mc-more').hidden = collapsed === 0;
   const feedback = $('mc-feedback');
   feedback.hidden = false;
   feedback.dataset.result = correct ? 'richtig' : 'falsch';
@@ -682,6 +697,11 @@ function answerChoice(index) {
   $('mc-next').hidden = false;
   $('mc-next').focus({ preventScroll: true });
   grade(current.card, correct, { advance: false });
+}
+
+function showAllOptions() {
+  $('mc-options').querySelectorAll('.is-collapsed').forEach((node) => node.classList.remove('is-collapsed'));
+  $('mc-more').hidden = true;
 }
 
 function nextCard() {
@@ -723,7 +743,7 @@ function rateClassic(known) {
 
 function showHint() {
   const current = pr.current;
-  if (!current || current.answered || pr.flipped) return;
+  if (!current || current.answered || pr.revealed) return;
   const box = $('hint-box');
   if (!box.hidden) {
     box.hidden = true;
@@ -845,14 +865,14 @@ export function refreshPractice() {
     return;
   }
   reconcile();
-  const keepFlip = pr.flipped && pr.current && pr.current.format === 'classic';
+  const keepRevealed = pr.revealed && pr.current && pr.current.format === 'classic';
   if (pr.current && pr.current.answered) {
     renderSessionBar();
     updateDueBadge();
     return; // Erklärung nach einer Auswahlfrage stehen lassen
   }
   renderPractice({ animate: false });
-  if (keepFlip && pr.current) setFlipped(true);
+  if (keepRevealed && pr.current) setRevealed(true);
 }
 
 /* ------------------------------------------------------------------ */
@@ -870,7 +890,7 @@ export function handlePracticeKey(event) {
   }
   if (pr.current.format === 'classic') {
     if ((key === ' ' || key === 'Enter') && !onControl) {
-      flipCard();
+      revealAnswer();
       return true;
     }
     if (key === '1' || key === 'ArrowLeft') {
@@ -937,7 +957,8 @@ export function initPractice(b) {
   $('practice-fach-btn').addEventListener('click', openFachChoice);
   $('practice-theme').addEventListener('change', (event) => setTheme(event.target.value));
   $('shuffle-btn').addEventListener('click', startSession);
-  $('flashcard').addEventListener('click', flipCard);
+  $('flashcard').addEventListener('click', revealAnswer);
+  $('mc-more').addEventListener('click', showAllOptions);
   $('rate-again').addEventListener('click', () => rateClassic(false));
   $('rate-known').addEventListener('click', () => rateClassic(true));
   $('mc-next').addEventListener('click', nextCard);

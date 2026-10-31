@@ -615,10 +615,11 @@ code {
 }
 
 .card-scene {
+  display: flex;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 620px;
-  height: 340px;
-  perspective: 1400px;
+  min-height: 220px;
 }
 
 .card-scene.card-enter {
@@ -631,70 +632,23 @@ code {
 }
 
 .flashcard {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
-  cursor: pointer;
+  min-height: 0;
+  padding: 16px 20px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
   touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
 }
+
+.flashcard[data-phase="sichtbar"] { cursor: default; }
 
 .flashcard:focus-visible {
   outline-offset: 4px;
-}
-
-.flashcard-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-  transition: transform var(--flip-duration) var(--flip-easing);
-}
-
-.flashcard-inner.no-transition {
-  transition: none;
-}
-
-.flashcard.is-flipped .flashcard-inner {
-  transform: rotateY(180deg);
-}
-
-.flashcard-face {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 52px 28px 40px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  text-align: center;
-}
-
-.flashcard-front {
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-.flashcard-back {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--accent-text);
-  transform: rotateY(180deg);
-}
-
-.flashcard-face .badge {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  max-width: calc(100% - 32px);
 }
 
 .face-label {
@@ -716,15 +670,11 @@ code {
   margin-bottom: auto;
 }
 
-.flashcard-back .face-text {
-  font-weight: 500;
-}
-
 .face-hint {
-  position: absolute;
-  bottom: 14px;
+  padding-top: 8px;
   font-size: 0.78rem;
   color: var(--muted);
+  text-align: center;
 }
 
 .rate-buttons {
@@ -1053,14 +1003,6 @@ code {
     flex: 1;
   }
 
-  .card-scene {
-    height: 270px;
-  }
-
-  .flashcard-face {
-    padding: 46px 18px 34px;
-  }
-
   .face-text {
     font-size: 1.12rem;
   }
@@ -1100,14 +1042,7 @@ code {
   }
 }
 
-@media (max-height: 560px) and (orientation: landscape) {
-  .card-scene {
-    height: 210px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .flashcard-inner,
   .toast,
   .btn,
   .tab {
@@ -2026,7 +1961,6 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 
 .face-rich { width: 100%; }
 .face-rich .rich p { margin-bottom: 8px; }
-.flashcard-back .term-link { text-decoration-color: currentColor; }
 
 .practice-help {
   display: flex;
@@ -2141,7 +2075,7 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 44px 24px 26px;
+  padding: 16px 24px 26px;
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2149,11 +2083,9 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
   text-align: center;
 }
 
-.mc-question .badge {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  max-width: calc(100% - 28px);
+.mc-question .card-tags {
+  align-self: stretch;
+  margin-bottom: 8px;
 }
 
 .mc-prompt {
@@ -2253,12 +2185,11 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 
 .mc-explain .face-label { display: block; margin-bottom: 4px; }
 
-.mc-next {
-  width: 100%;
-  max-width: 620px;
-  min-height: 52px;
-  margin-top: 14px;
-  font-size: 1rem;
+.session-bar .mc-next {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: 0.98rem;
 }
 
 .empty-actions { justify-content: center; margin-top: 12px; }
@@ -2269,7 +2200,7 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 
 @media (max-width: 600px) {
   .select-compact { flex: 1; }
-  .mc-question { padding: 40px 16px 20px; }
+  .mc-question { padding: 16px 16px 20px; }
   .mc-prompt { font-size: 1.12rem; }
   .mc-prompt-long { font-size: 0.95rem; }
 }
@@ -2394,3 +2325,78 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
   .sheet-backdrop { align-items: center; padding: 20px; }
   .modal.sheet { border-radius: var(--radius); }
 }
+
+/* ---------- Üben: Karte als Fläche, Nachlesen (Etappe 2) ---------- */
+
+.practice-area {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 210px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+.card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.card-tags .tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.card-tags .tag-nr { color: var(--accent); }
+
+.card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  text-align: center;
+}
+.card-body .face-label { margin-top: 0; }
+.card-body .face-text { margin-bottom: 0; }
+.card-body > :first-child { margin-top: auto; }
+.card-body > :last-child { margin-bottom: auto; }
+.card-question { font-size: 1.35rem; font-weight: 700; }
+
+.card-answer-wrap {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1.5px dashed var(--border);
+  text-align: left;
+}
+.card-answer-wrap .face-label { display: block; margin-bottom: 4px; }
+.card-answer { font-size: 1.1rem; font-weight: 500; }
+.flashcard[data-phase="verdeckt"] .card-answer-wrap { display: none; }
+.flashcard[data-phase="sichtbar"] .face-hint { visibility: hidden; }
+
+.rate-buttons {
+  position: sticky;
+  bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom));
+  z-index: 5;
+  padding-top: 8px;
+  background: linear-gradient(to top, var(--bg) 75%, transparent);
+}
+
+.mc-more {
+  align-self: center;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.mc-option.is-collapsed { display: none; }
+.mc-area.is-answered .mc-prompt,
+#mc-area.is-answered .mc-prompt { font-size: 1.5rem; }
+#mc-area.is-answered .mc-option { font-size: 1.12rem; padding: 14px 16px; }
+#mc-area.is-answered .mc-key { width: 30px; height: 30px; font-size: 0.9rem; }
+#mc-area.is-answered .mc-explain { font-size: 1.06rem; line-height: 1.55; }
+#mc-area { display: flex; flex-direction: column; }
+#mc-area[hidden] { display: none; }

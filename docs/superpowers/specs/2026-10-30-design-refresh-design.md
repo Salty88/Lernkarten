@@ -76,7 +76,7 @@ Gewählt: **A**, weil täglich mit der App gelernt wird und sie dabei stabil ble
 - Übungsform und Übungsplan wandern nach „Mehr“; Thema-Filter (freies Üben) bleibt erreichbar.
 - Tipp und Verweise bleiben erhalten.
 
-### Etappe 3 – Erstellen und Wissen
+### Etappe 3 – Erstellen und Wissen (umgesetzt am 03.11.2026)
 - **Erstellen**: Titel mit Kartenzahl, Fach-Knopf, Suchfeld (Text oder Nummer), Buchstabenleiste A–Z (leere Buchstaben ausgegraut, Antippen springt), Liste nach Buchstaben gruppiert; „＋ Neue Karte“ öffnet das Formular als Blatt; Bearbeiten/Löschen wie bisher.
 - **Wissen**: Kopf mit Titel, Fach-Knopf, Suche und Themen/A–Z/Eigene; Merker-Karten mit „📈 x % sicher“; Merker mit einem Thema ohne doppelten Titel/Sprungmarke.
 

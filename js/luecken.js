@@ -317,7 +317,7 @@ function renderNewForm(query, hadSuggestions) {
     }
     const settings = getSettings();
     if (!hasValidSettings(settings)) {
-      setStatus('Bitte zuerst die GitHub-Verbindung einrichten (Zahnrad oben rechts).');
+      setStatus('Bitte zuerst die GitHub-Verbindung einrichten (unter „Mehr“).');
       return;
     }
     if (lq.busy) return;

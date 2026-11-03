@@ -2,13 +2,13 @@
  * fach-sheet.js
  *
  * Fach-Auswahl als Blatt von unten: Liste aller Fächer mit Symbol und Anzahl.
- * Wird von „Üben“ genutzt (später auch von „Erstellen“ und „Wissen“); jeder
+ * Wird von „Üben“, „Erstellen“ und „Wissen“ genutzt; jeder
  * Reiter liefert eigene Einträge und reagiert selbst auf die Auswahl.
  */
 
 import { el, button, openModal, closeModal, closeOnBackdropClick } from './ui.js';
 
-const ICONS = { __all__: '🌐', 'vwl-bwl': '📈', rewe: '🧾', 'fi-inv': '💶', mpa: '🏭', org: '🧭', pm: '👥', ikt: '💻' };
+const ICONS = { __all__: '🌐', alle: '🌐', 'vwl-bwl': '📈', rewe: '🧾', 'fi-inv': '💶', mpa: '🏭', org: '🧭', pm: '👥', ikt: '💻' };
 
 /** @typedef {{ key: string, kurz: string, name: string, count: number, empty: boolean }} FachOption */
 

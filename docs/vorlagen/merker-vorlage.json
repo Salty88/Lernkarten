@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "id": "rewe-abschreibungen",
+  "fach": "rewe",
+  "titel": "Abschreibungen",
+  "teil": "Teil 1 von 1",
+  "skript": "Skript Rechnungswesen, Folien 40 bis 46",
+  "abkuerzungen": [
+    { "kurz": "AfA", "lang": "Absetzung für Abnutzung" },
+    { "kurz": "AHK", "lang": "Anschaffungs- oder Herstellungskosten" }
+  ],
+  "bloecke": [
+    {
+      "id": "A",
+      "titel": "Lineare und degressive Abschreibung",
+      "folien": "Folien 40 bis 43",
+      "praxis": {
+        "wann": "Beim Kauf einer Maschine, die mehrere Jahre genutzt wird.",
+        "wofuer": "Der Wertverlust wird auf die Nutzungsjahre verteilt.",
+        "warum": "Sonst wäre der Gewinn im Kaufjahr zu niedrig und danach zu hoch.",
+        "verknuepfung": "Hängt mit Aufwand und GuV zusammen."
+      },
+      "glossar": [
+        {
+          "begriff": "Lineare Abschreibung",
+          "kurz": "Jedes Jahr wird **derselbe Betrag** abgeschrieben (Folie 41).",
+          "funktion": "AHK geteilt durch Nutzungsdauer.",
+          "synonyme": ["gleichbleibende Abschreibung"],
+          "kuerzel": []
+        },
+        {
+          "begriff": "Degressive Abschreibung",
+          "kurz": "Jedes Jahr wird ein **fester Prozentsatz vom Restbuchwert** abgeschrieben (Folie 42).",
+          "funktion": "Am Anfang hohe, später niedrige Beträge.",
+          "synonyme": [],
+          "kuerzel": []
+        }
+      ],
+      "pruefung": {
+        "text": "Typische Aufgabe: Abschreibungsbetrag und Restbuchwert für ein Jahr berechnen.",
+        "zuordnung": [
+          { "frage": "Gleicher Betrag jedes Jahr", "antwort": "Lineare Abschreibung" },
+          { "frage": "Prozentsatz vom Restbuchwert", "antwort": "Degressive Abschreibung" }
+        ],
+        "tabelle": {
+          "titel": "Beispiel: Maschine 10.000 €, 5 Jahre, linear",
+          "spalten": ["Jahr", "Abschreibung", "Restbuchwert"],
+          "zeilen": [["1", "2.000 €", "8.000 €"], ["2", "2.000 €", "6.000 €"]]
+        },
+        "nachtrag": ""
+      },
+      "management": {
+        "aussagen": ["Abschreibungen sind Aufwand, aber keine Auszahlung."],
+        "uebersetzungen": [
+          { "halle": "Die Maschine kostet uns jedes Jahr 2.000 €.", "management": "Der Werteverzehr der Anlage beträgt jährlich 2.000 € und mindert den Gewinn, nicht die Liquidität." }
+        ],
+        "musterantwort": {
+          "frage": "Warum wird eine Maschine nicht im Kaufjahr voll als Aufwand gebucht?",
+          "hinweis": "Periodengerechte Erfolgsermittlung nennen.",
+          "antwort": "Weil sie mehrere Jahre genutzt wird. Die Abschreibung verteilt den Aufwand auf die Nutzungsjahre, so zeigt jedes Jahr einen zutreffenden Gewinn."
+        }
+      },
+      "abschluss": {
+        "kernaussage": "Abschreibung verteilt den Wertverlust einer Anlage auf ihre Nutzungsdauer.",
+        "feynman": {
+          "aufgabe": "Erkläre einem Freund, warum ein Unternehmen Gewinn machen kann, obwohl es eine teure Maschine gekauft hat.",
+          "muss": ["Verteilung auf Nutzungsjahre", "Aufwand ist nicht gleich Auszahlung"]
+        }
+      },
+      "abweichungen": [
+        { "typ": "Ergänzung", "text": "Beispielrechnung selbst ergänzt, nicht aus dem Skript." }
+      ]
+    }
+  ],
+  "quellen": [
+    { "text": "HGB § 253", "url": "https://www.gesetze-im-internet.de/hgb/__253.html" }
+  ]
+}

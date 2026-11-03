@@ -506,7 +506,7 @@ export function renderPractice({ animate = true } = {}) {
   const all = bridge.cards();
   if (!all.length) {
     if (!bridge.isConfigured()) {
-      showEmpty('🔌', 'Noch nicht verbunden', 'Verbinde zuerst dein GitHub-Repository über das Zahnrad oben rechts.', [['Einstellungen öffnen', bridge.openSettings, true]]);
+      showEmpty('🔌', 'Noch nicht verbunden', 'Verbinde zuerst dein GitHub-Repository unter „Mehr“.', [['Einstellungen öffnen', bridge.openSettings, true]]);
     } else {
       showEmpty('🗂️', 'Noch keine Karten', 'Lege im Tab „Erstellen“ eine Karte an oder erzeuge Karten aus dem Wissen im Tab „Lücken“.', [
         ['Karte erstellen', () => bridge.switchTab('create'), true],

@@ -42,9 +42,10 @@ import {
   wissenCard,
 } from './wissen-data.js';
 import { getEntry } from './progress.js';
-import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
+import { openFachSheet, refreshFachSheet, fachIcon } from './fach-sheet.js';
 import { textToMerker, looksLikeMerkerText, MERKER_TEXT_VORLAGE } from './merker-text.js';
-import { textToSkript, skriptToText, SKRIPT_TEXT_VORLAGE } from './skript-text.js';
+import { textToSkript, skriptToText, cleanPdfText, SKRIPT_TEXT_VORLAGE } from './skript-text.js';
+import { renderSkriptText } from './skript-view.js';
 
 const PREFS_KEY = 'lernkartei.wissen.prefs';
 const ALL = 'alle';
@@ -795,28 +796,73 @@ function renderRegister() {
 /* Skripte: Lesetexte je Fach                                          */
 /* ------------------------------------------------------------------ */
 
+const READ_KEY = 'lernkartei.skripte.gelesen';
+
+/** Zuletzt gelesenes Kapitel je Skript (pro Gerät). */
+function lastRead() {
+  try {
+    return JSON.parse(localStorage.getItem(READ_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberRead(skriptId, kapitelId) {
+  try {
+    const all = lastRead();
+    if (all[skriptId] === kapitelId) return;
+    all[skriptId] = kapitelId;
+    localStorage.setItem(READ_KEY, JSON.stringify(all));
+  } catch {
+    /* nur Komfort */
+  }
+}
+
 function skriptMeta(skript) {
   const stats = skriptStats(skript);
   return `${plural(stats.kapitel, 'Kapitel', 'Kapitel')} · ≈ ${stats.minuten} Min. lesen`;
 }
 
+function renderSkriptCard(skript) {
+  const card = el('article', 'skript-card');
+  const open = button('skript-card-main', null, () => openSkript(skript.id));
+  const head = el('span', 'skript-card-head');
+  const titles = el('span', 'skript-card-titles');
+  titles.append(el('span', 'skript-card-title', skript.titel));
+  if (skript.teil) titles.append(el('span', 'skript-card-teil', skript.teil));
+  head.append(el('span', 'skript-card-icon', fachIcon(skript.fach)), titles);
+  open.append(head, el('span', 'skript-card-meta', skriptMeta(skript)));
+
+  const toc = el('ol', 'skript-card-toc');
+  skript.kapitel.slice(0, 4).forEach((k) => toc.append(el('li', null, k.titel)));
+  if (skript.kapitel.length > 4) toc.append(el('li', 'skript-card-more', `und ${skript.kapitel.length - 4} weitere`));
+  open.append(toc);
+  card.append(open);
+
+  const readId = lastRead()[skript.id];
+  const index = skript.kapitel.findIndex((k) => k.id === readId);
+  if (index > 0) {
+    const k = skript.kapitel[index];
+    card.append(button('skript-card-resume', `▶ Weiterlesen: ${index + 1}. ${k.titel}`, () => openSkript(skript.id, k.id)));
+  }
+  return card;
+}
+
 function renderSkriptList() {
   const wrap = el('div', 'skript-list');
+  const list = store.skripte.filter((x) => matchesFach(x.fach));
   const bar = el('div', 'eigene-bar');
-  bar.append(
-    el('p', 'muted small', plural(store.skripte.filter((x) => matchesFach(x.fach)).length, 'Skript', 'Skripte')),
-    button('btn btn-small btn-primary', '＋ Skript hinzufügen', () => openSkriptEditor(null)),
-  );
+  bar.append(el('p', 'muted small', plural(list.length, 'Skript', 'Skripte')), button('btn btn-small btn-primary', '＋ Skript hinzufügen', () => openSkriptEditor(null)));
   wrap.append(bar);
 
-  const list = store.skripte.filter((x) => matchesFach(x.fach));
   if (!list.length) {
-    const empty = emptyState(
-      '📖',
-      ws.fach === ALL ? 'Noch keine Skripte' : `Noch keine Skripte in ${fachLabel(ws.fach)}`,
-      'Lege Lesetexte zum schnellen Nachlesen an: Kapitel für Kapitel, in deinen eigenen Worten. Begriffe aus deinen Merkern werden darin automatisch verlinkt.',
+    wrap.append(
+      emptyState(
+        '📖',
+        ws.fach === ALL ? 'Noch keine Skripte' : `Noch keine Skripte in ${fachLabel(ws.fach)}`,
+        'Lege Lesetexte zum schnellen Nachlesen an: ein Skript je Thema, darin beliebig viele Kapitel. Text aus dem PDF wird beim Einfügen automatisch aufgeräumt.',
+      ),
     );
-    wrap.append(empty);
     return wrap;
   }
 
@@ -828,11 +874,7 @@ function renderSkriptList() {
       head.append(el('span', 'fach-group-kurz', fachLabel(skript.fach)), document.createTextNode(fachName(skript.fach)));
       wrap.append(head);
     }
-    const card = button('merker-card skript-card', null, () => openSkript(skript.id));
-    card.append(el('span', 'merker-card-title', skript.titel));
-    if (skript.teil) card.append(el('span', 'merker-card-teil', skript.teil));
-    card.append(el('span', 'merker-card-stats', skriptMeta(skript)));
-    wrap.append(card);
+    wrap.append(renderSkriptCard(skript));
   }
   return wrap;
 }
@@ -849,8 +891,23 @@ export function openSkript(skriptId, kapitelId = null) {
   renderWissen();
   requestAnimationFrame(() => {
     const target = kapitelId ? document.getElementById(`skript-${skriptId}-${kapitelId}`) : $('w-content');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (target) target.scrollIntoView({ behavior: kapitelId ? 'smooth' : 'auto', block: 'start' });
   });
+}
+
+/** Merkt sich beim Lesen das aktuelle Kapitel (für „Weiterlesen“). */
+function trackReading() {
+  if (ws.mode !== 'skripte' || !ws.openSkriptId || $('view-wissen').hidden) return;
+  const sections = [...document.querySelectorAll('#w-content .skript-kapitel')];
+  if (!sections.length) return;
+  const line = window.innerHeight * 0.35;
+  const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4;
+  let current = sections[0];
+  for (const section of sections) {
+    const top = section.getBoundingClientRect().top;
+    if (top <= line || (atEnd && top < window.innerHeight)) current = section;
+  }
+  rememberRead(ws.openSkriptId, current.dataset.kapitel);
 }
 
 function renderSkriptView() {
@@ -859,6 +916,10 @@ function renderSkriptView() {
     ws.openSkriptId = null;
     return renderSkriptList();
   }
+  const scrollTo = (k) => {
+    const target = document.getElementById(`skript-${skript.id}-${k.id}`);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const wrap = el('div', 'skript-view');
   wrap.append(
     button('btn btn-small btn-secondary back-btn', '‹ Alle Skripte', () => {
@@ -867,15 +928,19 @@ function renderSkriptView() {
     }),
   );
 
-  const head = el('header', 'panel merker-head');
+  const head = el('header', 'panel skript-head');
   const meta = el('div', 'merker-meta');
   meta.append(fachBadge(skript.fach), el('span', 'merker-kontext', skriptMeta(skript)));
   head.append(meta, el('h2', 'merker-title', skript.titel));
   if (skript.teil) head.append(el('p', 'merker-teil', skript.teil));
-  const actions = el('div', 'list-actions skript-actions');
+  const actions = el('div', 'skript-actions');
+  const remove = button('icon-btn skript-delete', '🗑', () => deleteSkript(skript));
+  remove.setAttribute('aria-label', 'Skript löschen');
+  remove.title = 'Skript löschen';
   actions.append(
     button('btn btn-small btn-secondary', '✎ Bearbeiten', () => openSkriptEditor(skript.id)),
-    button('btn btn-small btn-ghost-danger', '🗑 Löschen', () => deleteSkript(skript)),
+    button('btn btn-small btn-secondary', '＋ Kapitel', () => openSkriptEditor(skript.id, { neuesKapitel: true })),
+    remove,
   );
   head.append(actions);
   wrap.append(head);
@@ -885,10 +950,7 @@ function renderSkriptView() {
     toc.setAttribute('aria-label', 'Inhalt');
     toc.append(el('p', 'skript-toc-title', 'Inhalt'));
     skript.kapitel.forEach((k, i) => {
-      const item = button('skript-toc-item', null, () => {
-        const target = document.getElementById(`skript-${skript.id}-${k.id}`);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      const item = button('skript-toc-item', null, () => scrollTo(k));
       item.append(el('span', 'skript-toc-nr', String(i + 1)), el('span', 'skript-toc-name', k.titel));
       if (k.folien) item.append(el('span', 'skript-toc-folien', k.folien));
       toc.append(item);
@@ -897,21 +959,30 @@ function renderSkriptView() {
   }
 
   skript.kapitel.forEach((k, i) => {
-    const section = el('section', 'panel skript-kapitel');
+    const section = el('section', 'skript-kapitel');
     section.id = `skript-${skript.id}-${k.id}`;
+    section.dataset.kapitel = k.id;
     const h = el('header', 'skript-kapitel-head');
-    const titleWrap = el('div', 'block-head');
-    titleWrap.append(el('h3', 'skript-kapitel-title', k.titel));
+    const titleWrap = el('div', 'skript-kapitel-titles');
+    titleWrap.append(el('span', 'skript-kapitel-nr', `Kapitel ${i + 1}`), el('h3', 'skript-kapitel-title', k.titel));
     if (k.folien) titleWrap.append(el('span', 'block-folien', k.folien));
-    h.append(el('span', 'block-id', String(i + 1)), titleWrap);
+    const edit = button('icon-btn skript-kapitel-edit', '✎', () => openSkriptEditor(skript.id, { kapitel: i }));
+    edit.setAttribute('aria-label', `Kapitel ${i + 1} bearbeiten`);
+    edit.title = 'Kapitel bearbeiten';
+    h.append(titleWrap, edit);
     section.append(h);
-    if (k.text.trim()) section.append(renderRich(k.text, linkCtx({ fach: skript.fach })));
+    if (k.text.trim()) section.append(renderSkriptText(k.text, linkCtx({ fach: skript.fach })));
+    const next = skript.kapitel[i + 1];
+    if (next) section.append(button('skript-next', `Weiter: ${i + 2}. ${next.titel} ›`, () => scrollTo(next)));
     wrap.append(section);
   });
+
   return wrap;
 }
 
-let skriptEditor = { id: null, candidate: null };
+/* ---------- Skript-Editor: Formular mit Kapiteln oder Text ---------- */
+
+const editorState = { id: null, mode: 'form', kapitel: [], focus: null };
 
 function setSkriptStatus(text, type = 'info') {
   const box = $('skript-status');
@@ -920,44 +991,282 @@ function setSkriptStatus(text, type = 'info') {
   box.hidden = !text;
 }
 
-function checkSkript(text) {
-  skriptEditor.candidate = null;
-  $('skript-preview').replaceChildren();
-  $('skript-save').disabled = true;
-  if (!text.trim()) {
-    setSkriptStatus('');
-    return;
+function fillFachSelect(current) {
+  const select = $('skript-fach');
+  const keys = [...FAECHER.map((f) => f.id)];
+  if (current && !keys.includes(current)) keys.push(current);
+  select.replaceChildren(
+    ...keys.map((key) => {
+      const option = el('option', null, `${fachLabel(key)} · ${fachName(key)}`);
+      option.value = key;
+      return option;
+    }),
+  );
+  select.value = current || keys[0];
+}
+
+/** Rohdaten aus dem Formular (noch ungeprüft). */
+function formRaw() {
+  const fach = $('skript-fach').value;
+  const titel = $('skript-titel').value.trim();
+  const teil = $('skript-teil').value.trim();
+  const id = editorState.id || slugId(`${fach.replace(/^x:/, '')}-${titel}${teil ? `-${teil}` : ''}`);
+  return {
+    schema: 1,
+    id,
+    fach: fach.startsWith('x:') ? fach.slice(2) : fach,
+    titel,
+    teil,
+    kapitel: editorState.kapitel
+      .map((k) => ({ titel: k.titel.trim(), folien: k.folien.trim(), text: k.text.replace(/\s+$/, '') }))
+      .filter((k) => k.titel || k.text.trim())
+      .map((k, i) => ({ id: `k${i + 1}`, ...k, titel: k.titel || `Kapitel ${i + 1}` })),
+  };
+}
+
+function slugId(text) {
+  return norm(text).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+}
+
+function autoGrow(area) {
+  area.style.height = 'auto';
+  area.style.height = `${Math.min(area.scrollHeight + 2, 520)}px`;
+}
+
+/** Setzt ein Zeichen an den Anfang der aktuellen Zeile oder fügt eine neue Zeile ein. */
+function insertAtLine(area, prefix, { newLine = false } = {}) {
+  const { value, selectionStart } = area;
+  const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+  const lineEnd = value.indexOf('\n', selectionStart) === -1 ? value.length : value.indexOf('\n', selectionStart);
+  const line = value.slice(lineStart, lineEnd);
+  let next;
+  let cursor;
+  if (newLine && line.trim()) {
+    next = `${value.slice(0, lineEnd)}\n${prefix}${value.slice(lineEnd)}`;
+    cursor = lineEnd + 1 + prefix.length;
+  } else {
+    const stripped = line.replace(/^(###\s|-\s|Beispiel:\s?|Merksatz:\s?)/, '');
+    next = `${value.slice(0, lineStart)}${prefix}${stripped}${value.slice(lineEnd)}`;
+    cursor = lineStart + prefix.length + stripped.length;
   }
-  try {
-    const raw = textToSkript(text, { id: skriptEditor.id || undefined });
-    const skript = normalizeSkript(raw);
-    skriptEditor.candidate = { raw, skript };
-    const row = el('div', 'import-row');
-    const top = el('span', 'reg-top');
-    top.append(fachBadge(skript.fach), el('span', 'reg-title', skript.titel));
-    row.append(top, el('span', 'reg-sub', `${skript.teil ? `${skript.teil} · ` : ''}${skriptMeta(skript)}`));
-    row.append(el('span', 'reg-sub', skript.kapitel.map((k, i) => `${i + 1}. ${k.titel}`).join(' · ')));
-    $('skript-preview').append(row);
-    setSkriptStatus('Geprüft. Alles in Ordnung.', 'success');
-    $('skript-save').disabled = false;
-  } catch (err) {
-    setSkriptStatus(err.message, 'error');
+  area.value = next;
+  area.focus();
+  area.setSelectionRange(cursor, cursor);
+  area.dispatchEvent(new Event('input'));
+}
+
+function renderKapitelEditor() {
+  const list = $('skript-kapitel-list');
+  const count = editorState.kapitel.length;
+  $('skript-kap-count').textContent = plural(count, 'Kapitel', 'Kapitel');
+  list.replaceChildren(
+    ...editorState.kapitel.map((k, i) => {
+      const card = el('div', 'sk-ed-kapitel');
+      const head = el('div', 'sk-ed-head');
+      const titel = el('input', 'input sk-ed-titel');
+      titel.type = 'text';
+      titel.value = k.titel;
+      titel.placeholder = `Titel von Kapitel ${i + 1}`;
+      titel.setAttribute('aria-label', `Titel von Kapitel ${i + 1}`);
+      titel.addEventListener('input', () => {
+        k.titel = titel.value;
+      });
+      const tools = el('div', 'sk-ed-order');
+      const up = button('icon-btn sk-ed-icon', '↑', () => moveKapitel(i, -1));
+      up.disabled = i === 0;
+      up.setAttribute('aria-label', 'Nach oben');
+      const down = button('icon-btn sk-ed-icon', '↓', () => moveKapitel(i, 1));
+      down.disabled = i === count - 1;
+      down.setAttribute('aria-label', 'Nach unten');
+      const del = button('icon-btn sk-ed-icon is-danger', '🗑', () => removeKapitel(i));
+      del.setAttribute('aria-label', `Kapitel ${i + 1} entfernen`);
+      tools.append(up, down, del);
+      head.append(el('span', 'block-id', String(i + 1)), titel, tools);
+
+      const folien = el('input', 'input sk-ed-folien');
+      folien.type = 'text';
+      folien.value = k.folien;
+      folien.placeholder = 'Folien oder Seiten (freiwillig), z. B. Folien 3 bis 5';
+      folien.setAttribute('aria-label', 'Folien oder Seiten');
+      folien.addEventListener('input', () => {
+        k.folien = folien.value;
+      });
+
+      const area = el('textarea', 'input textarea sk-ed-text');
+      area.value = k.text;
+      area.rows = 6;
+      area.placeholder = 'Text hier einfügen oder schreiben …';
+      area.setAttribute('aria-label', `Text von Kapitel ${i + 1}`);
+      const preview = el('div', 'sk-ed-preview');
+      preview.hidden = true;
+      area.addEventListener('input', () => {
+        k.text = area.value;
+        autoGrow(area);
+        if (!preview.hidden) preview.replaceChildren(renderSkriptText(k.text, linkCtx({ fach: $('skript-fach').value })));
+      });
+      area.addEventListener('paste', (event) => {
+        const pasted = event.clipboardData ? event.clipboardData.getData('text/plain') : '';
+        if (!pasted || !pasted.includes('\n')) return;
+        event.preventDefault();
+        const before = area.value;
+        const cleaned = cleanPdfText(pasted);
+        const start = area.selectionStart;
+        area.setRangeText(cleaned.text, start, area.selectionEnd, 'end');
+        area.dispatchEvent(new Event('input'));
+        const titelBefore = k.titel;
+        if (!k.titel.trim() && cleaned.titel) {
+          k.titel = cleaned.titel;
+          titel.value = cleaned.titel;
+        }
+        showToast('Text aufgeräumt', 'success', {
+          label: 'Original einfügen',
+          onClick: () => {
+            area.value = before;
+            area.setRangeText(pasted, start, start, 'end');
+            k.titel = titelBefore;
+            titel.value = titelBefore;
+            area.dispatchEvent(new Event('input'));
+          },
+        });
+      });
+
+      const bar = el('div', 'sk-ed-tools');
+      const tool = (label, title, onClick) => {
+        const b = button('chip sk-ed-tool', label, onClick);
+        b.title = title;
+        return b;
+      };
+      bar.append(
+        tool('Abschnitt', 'Zeile wird Zwischenüberschrift', () => insertAtLine(area, '### ')),
+        tool('• Punkt', 'Zeile wird Aufzählungspunkt', () => insertAtLine(area, '- ')),
+        tool('💡 Beispiel', 'Neue Zeile mit Beispiel', () => insertAtLine(area, 'Beispiel: ', { newLine: true })),
+        tool('📌 Merksatz', 'Neue Zeile mit Merksatz', () => insertAtLine(area, 'Merksatz: ', { newLine: true })),
+        tool('🧹 Aufräumen', 'Text wie aus dem PDF aufräumen', () => {
+          const cleaned = cleanPdfText(area.value);
+          area.value = cleaned.text;
+          if (!k.titel.trim() && cleaned.titel) {
+            k.titel = cleaned.titel;
+            titel.value = cleaned.titel;
+          }
+          area.dispatchEvent(new Event('input'));
+          showToast('Text aufgeräumt', 'success');
+        }),
+        tool('👁 Vorschau', 'So sieht das Kapitel aus', () => {
+          preview.hidden = !preview.hidden;
+          if (!preview.hidden) preview.replaceChildren(renderSkriptText(k.text, linkCtx({ fach: $('skript-fach').value })));
+        }),
+      );
+
+      card.append(head, folien, bar, area, preview);
+      requestAnimationFrame(() => autoGrow(area));
+      return card;
+    }),
+  );
+}
+
+function moveKapitel(i, delta) {
+  const j = i + delta;
+  if (j < 0 || j >= editorState.kapitel.length) return;
+  [editorState.kapitel[i], editorState.kapitel[j]] = [editorState.kapitel[j], editorState.kapitel[i]];
+  renderKapitelEditor();
+  const target = $('skript-kapitel-list').children[j];
+  if (target) target.scrollIntoView({ block: 'nearest' });
+}
+
+function removeKapitel(i) {
+  const k = editorState.kapitel[i];
+  if ((k.text.trim() || k.titel.trim()) && !window.confirm(`Kapitel ${i + 1}${k.titel ? ` „${k.titel}“` : ''} entfernen?`)) return;
+  editorState.kapitel.splice(i, 1);
+  if (!editorState.kapitel.length) editorState.kapitel.push({ titel: '', folien: '', text: '' });
+  renderKapitelEditor();
+}
+
+function addKapitel() {
+  editorState.kapitel.push({ titel: '', folien: '', text: '' });
+  renderKapitelEditor();
+  const last = $('skript-kapitel-list').lastElementChild;
+  if (last) {
+    last.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    last.querySelector('.sk-ed-titel').focus({ preventScroll: true });
   }
 }
 
-export function openSkriptEditor(id) {
-  const existing = id ? store.skripte.find((x) => x.id === id) : null;
-  skriptEditor = { id: existing ? existing.id : null, candidate: null };
-  $('skript-modal-title').textContent = existing ? 'Skript bearbeiten' : 'Skript hinzufügen';
-  const preset = !existing && ws.fach !== ALL ? `Fach: ${fachLabel(ws.fach)}\nTitel: \n\n## \n` : '';
-  $('skript-text').value = existing ? skriptToText(existing, fachLabel(existing.fach)) : preset;
-  if (existing) checkSkript($('skript-text').value);
-  else {
-    $('skript-preview').replaceChildren();
-    $('skript-save').disabled = true;
-    setSkriptStatus('');
+function fillForm(skript) {
+  fillFachSelect(skript ? skript.fach : ws.fach !== ALL ? ws.fach : FAECHER[0].id);
+  $('skript-titel').value = skript ? skript.titel : '';
+  $('skript-teil').value = skript ? skript.teil : '';
+  editorState.kapitel = skript && skript.kapitel.length
+    ? skript.kapitel.map((k) => ({ titel: k.titel, folien: k.folien, text: k.text }))
+    : [{ titel: '', folien: '', text: '' }];
+  renderKapitelEditor();
+}
+
+function setEditorMode(mode) {
+  if (mode === editorState.mode) return;
+  if (mode === 'text') {
+    const raw = formRaw();
+    $('skript-text').value = raw.titel || raw.kapitel.length ? skriptToText({ ...raw, kapitel: raw.kapitel }, fachLabel(fachKey(raw.fach))) : '';
+  } else {
+    const text = $('skript-text').value;
+    if (text.trim()) {
+      try {
+        fillForm(normalizeSkript(textToSkript(text, { id: editorState.id || undefined })));
+      } catch (err) {
+        setSkriptStatus(err.message, 'error');
+        return;
+      }
+    }
   }
-  openModal($('skript-modal'), $('skript-text'));
+  editorState.mode = mode;
+  setSkriptStatus('');
+  $('skript-form-pane').hidden = mode !== 'form';
+  $('skript-text-pane').hidden = mode !== 'text';
+  document.querySelectorAll('#skript-mode .seg').forEach((seg) => {
+    const active = seg.dataset.mode === mode;
+    seg.classList.toggle('is-active', active);
+    seg.setAttribute('aria-selected', String(active));
+  });
+}
+
+/**
+ * Öffnet den Editor. options.neuesKapitel hängt ein leeres Kapitel an,
+ * options.kapitel springt zu einem vorhandenen Kapitel.
+ */
+export function openSkriptEditor(id, options = {}) {
+  const existing = id ? store.skripte.find((x) => x.id === id) : null;
+  editorState.id = existing ? existing.id : null;
+  editorState.mode = 'form';
+  $('skript-form-pane').hidden = false;
+  $('skript-text-pane').hidden = true;
+  document.querySelectorAll('#skript-mode .seg').forEach((seg) => {
+    seg.classList.toggle('is-active', seg.dataset.mode === 'form');
+    seg.setAttribute('aria-selected', String(seg.dataset.mode === 'form'));
+  });
+  $('skript-modal-title').textContent = existing ? 'Skript bearbeiten' : 'Skript hinzufügen';
+  $('skript-titel-list').replaceChildren(
+    ...[...new Set(store.skripte.map((x) => x.titel))].map((t) => {
+      const option = document.createElement('option');
+      option.value = t;
+      return option;
+    }),
+  );
+  $('skript-text').value = '';
+  setSkriptStatus('');
+  fillForm(existing);
+  if (options.neuesKapitel) {
+    editorState.kapitel.push({ titel: '', folien: '', text: '' });
+    renderKapitelEditor();
+  }
+  const index = options.neuesKapitel ? editorState.kapitel.length - 1 : options.kapitel;
+  openModal($('skript-modal'), index === undefined ? $('skript-titel') : null);
+  if (index !== undefined) {
+    requestAnimationFrame(() => {
+      const card = $('skript-kapitel-list').children[index];
+      if (!card) return;
+      card.scrollIntoView({ block: 'start' });
+      (options.neuesKapitel ? card.querySelector('.sk-ed-titel') : card.querySelector('.sk-ed-text')).focus({ preventScroll: true });
+    });
+  }
 }
 
 async function saveSkriptFromEditor() {
@@ -966,24 +1275,47 @@ async function saveSkriptFromEditor() {
     setSkriptStatus('Bitte zuerst die GitHub-Verbindung einrichten (unter „Mehr“).', 'error');
     return;
   }
-  const { candidate } = skriptEditor;
-  if (!candidate) return;
-  if (!skriptEditor.id && skriptPathExists(settings, candidate.skript.id)) {
-    if (!window.confirm(`Es gibt schon ein Skript „${candidate.skript.titel}“. Ersetzen?`)) return;
+  let raw;
+  try {
+    raw = editorState.mode === 'text' ? textToSkript($('skript-text').value, { id: editorState.id || undefined }) : formRaw();
+    if (!raw.titel) throw new Error('Bitte einen Titel eingeben.');
+    if (!raw.kapitel.some((k) => k.text.trim())) throw new Error('Bitte mindestens ein Kapitel mit Text füllen.');
+  } catch (err) {
+    setSkriptStatus(err.message, 'error');
+    return;
+  }
+
+  // Gleiches Fach und gleicher Titel: Kapitel an das vorhandene Skript anhängen statt ein zweites anzulegen
+  if (!editorState.id) {
+    const key = fachKey(raw.fach);
+    const same = store.skripte.find((x) => x.fach === key && norm(x.titel) === norm(raw.titel) && norm(x.teil) === norm(raw.teil));
+    if (same) {
+      if (!window.confirm(`Es gibt schon das Skript „${same.titel}“. Die neuen Kapitel dort anhängen?`)) return;
+      const kapitel = [...same.kapitel, ...raw.kapitel].map((k, i) => ({ ...k, id: `k${i + 1}` }));
+      raw = { ...raw, id: same.id, kapitel };
+      editorState.id = same.id;
+    }
+  }
+
+  let skript;
+  try {
+    skript = normalizeSkript(raw);
+  } catch (err) {
+    setSkriptStatus(err.message, 'error');
+    return;
   }
   const btn = $('skript-save');
   btn.disabled = true;
   btn.textContent = 'Speichere …';
   try {
-    await saveSkript(settings, candidate.skript, candidate.raw);
+    await saveSkript(settings, skript, raw);
     closeModal($('skript-modal'));
-    showToast(skriptEditor.id ? 'Skript gespeichert' : 'Skript hinzugefügt', 'success');
-    ws.fach = ws.fach === ALL ? ALL : candidate.skript.fach;
-    openSkript(candidate.skript.id);
+    showToast('Skript gespeichert', 'success');
+    openSkript(skript.id);
   } catch (err) {
     setSkriptStatus(`Speichern fehlgeschlagen: ${errorText(err)}`, 'error');
-    btn.disabled = false;
   } finally {
+    btn.disabled = false;
     btn.textContent = 'Speichern';
   }
 }
@@ -1731,16 +2063,20 @@ export function initWissen(options) {
   closeOnBackdropClick($('import-modal'));
 
   // Skripte
-  let skriptTimer = null;
-  $('skript-text').addEventListener('input', (event) => {
-    clearTimeout(skriptTimer);
-    skriptTimer = setTimeout(() => checkSkript(event.target.value), 250);
-  });
+  let readFrame = 0;
+  window.addEventListener('scroll', () => {
+    if (readFrame) return;
+    readFrame = requestAnimationFrame(() => {
+      readFrame = 0;
+      trackReading();
+    });
+  }, { passive: true });
+  $('skript-add-kapitel').addEventListener('click', addKapitel);
+  document.querySelectorAll('#skript-mode .seg').forEach((seg) => seg.addEventListener('click', () => setEditorMode(seg.dataset.mode)));
   $('skript-template').addEventListener('click', () => {
     const area = $('skript-text');
     if (area.value.trim() && !window.confirm('Den Inhalt durch die Vorlage ersetzen?')) return;
     area.value = SKRIPT_TEXT_VORLAGE;
-    checkSkript(area.value);
     area.focus();
     area.setSelectionRange(0, 0);
     area.scrollTop = 0;

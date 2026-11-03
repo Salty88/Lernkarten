@@ -404,33 +404,65 @@
 
   <!-- ============ Skript hinzufügen oder bearbeiten ============ -->
   <div class="modal-backdrop" id="skript-modal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="skript-modal-title">
+    <div class="modal skript-editor" role="dialog" aria-modal="true" aria-labelledby="skript-modal-title">
       <div class="modal-header">
         <h2 id="skript-modal-title">Skript hinzufügen</h2>
         <button class="icon-btn" id="skript-cancel" type="button" aria-label="Schließen">✕</button>
       </div>
-      <p class="muted">Schreibe oder füge den Text ein. Oben Fach und Titel, darunter je Kapitel eine Zeile mit <code>##</code> und der Text dazu.</p>
-      <div class="form-actions">
-        <button class="btn btn-secondary" id="skript-template" type="button">📝 Vorlage einfügen</button>
+
+      <div class="segmented segmented-small skript-mode" id="skript-mode" role="tablist" aria-label="Eingabe">
+        <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="form">Formular</button>
+        <button class="seg" type="button" role="tab" aria-selected="false" data-mode="text">Als Text</button>
       </div>
-      <label class="field import-paste">
-        <span class="field-label">Inhalt</span>
-        <textarea class="input textarea import-textarea" id="skript-text" rows="12" spellcheck="true" placeholder="Fach: ReWe&#10;Titel: Grundlagen&#10;&#10;## Erstes Kapitel (Folien 1 bis 6)&#10;Text …"></textarea>
-      </label>
-      <details class="import-help">
-        <summary>So funktioniert das Format</summary>
-        <ul>
-          <li><strong>Fach:</strong> und <strong>Titel:</strong> oben sind Pflicht, <strong>Teil:</strong> ist freiwillig.</li>
-          <li><strong>## Kapitel (Folien 3 bis 5)</strong> beginnt ein Kapitel. Die Folien-Angabe in Klammern ist freiwillig.</li>
-          <li><strong>### Zwischenüberschrift</strong> gliedert ein Kapitel.</li>
-          <li>Leerzeile = neuer Absatz, „- “ am Zeilenanfang = Aufzählung, <code>**fett**</code> = fett, „(Folie 9)“ = Verweis.</li>
-          <li>Bekannte Begriffe aus deinen Merkern werden beim Lesen automatisch verlinkt.</li>
-        </ul>
-      </details>
-      <div id="skript-preview"></div>
+
+      <div id="skript-form-pane">
+        <label class="field">
+          <span class="field-label">Titel</span>
+          <input class="input" id="skript-titel" type="text" list="skript-titel-list" placeholder="z. B. Wirtschaftssysteme" autocomplete="off">
+        </label>
+        <datalist id="skript-titel-list"></datalist>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Fach</span>
+            <select class="select" id="skript-fach"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">Teil (freiwillig)</span>
+            <input class="input" id="skript-teil" type="text" placeholder="z. B. Teil 1" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="sk-ed-heading">
+          <h3>Kapitel</h3>
+          <span class="muted small" id="skript-kap-count"></span>
+        </div>
+        <p class="muted small sk-ed-hint">Text aus dem PDF einfach einfügen: Zeilenumbrüche, Aufzählungen und Leerzeichen werden automatisch aufgeräumt. Kurze Zeilen vor einer Aufzählung werden Zwischenüberschriften.</p>
+        <div id="skript-kapitel-list"></div>
+        <button class="btn btn-secondary sk-ed-add" id="skript-add-kapitel" type="button">＋ Kapitel hinzufügen</button>
+      </div>
+
+      <div id="skript-text-pane" hidden>
+        <p class="muted small">Das ganze Skript als Text, z. B. zum Kopieren oder Einfügen. Oben Fach und Titel, je Kapitel eine Zeile mit <code>##</code>.</p>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="skript-template" type="button">📝 Vorlage einfügen</button>
+        </div>
+        <label class="field import-paste">
+          <span class="visually-hidden">Skript als Text</span>
+          <textarea class="input textarea import-textarea" id="skript-text" rows="14" spellcheck="true"></textarea>
+        </label>
+        <details class="import-help">
+          <summary>So funktioniert das Textformat</summary>
+          <ul>
+            <li><strong>Fach:</strong> und <strong>Titel:</strong> oben sind Pflicht, <strong>Teil:</strong> ist freiwillig.</li>
+            <li><code>## Kapitel (Folien 3 bis 5)</code> beginnt ein Kapitel, <code>### Abschnitt</code> einen Abschnitt.</li>
+            <li><code>- </code> = Aufzählung, <code>Beispiel: …</code> und <code>Merksatz: …</code> werden hervorgehoben, <code>**fett**</code> = fett.</li>
+          </ul>
+        </details>
+      </div>
+
       <p class="settings-message" id="skript-status" role="status" hidden></p>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="skript-save" type="button" disabled>Speichern</button>
+      <div class="form-actions sk-ed-actions">
+        <button class="btn btn-primary" id="skript-save" type="button">Speichern</button>
       </div>
     </div>
   </div>

@@ -131,3 +131,109 @@ export function skriptToText(skript, fachText) {
   }
   return `${lines.join('\n')}\n`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Text aus PDFs aufräumen                                             */
+/* ------------------------------------------------------------------ */
+
+/** Wörter, nach denen ein Satz nie endet: Zeile danach gehört noch dazu. */
+const JOIN_AFTER = new Set(
+  'der die das den dem des ein eine einer einen einem eines und oder sowie bzw von vom zu zur zum mit im in ins auf an am bei für über unter durch gegen ohne um aus nach vor zwischen als wie wenn dass ob sich nicht auch sehr'.split(' '),
+);
+const BULLET = /^\s*(?:[-–—•●▪◦‣∙·*]|\d+[.)])\s*/;
+const SENTENCE_END = /[.!?:;]$/;
+
+const isBullet = (line) => /^- /.test(line);
+const isMarked = (line) => /^(###\s|Beispiel:|Merksatz:|Merke:|\|)/i.test(line);
+
+/** Satzzeichen und Abkürzungen: fehlende Leerzeichen ergänzen, doppelte entfernen. */
+function fixSpacing(line) {
+  return line
+    .replace(/\bz\.\s?B\.\s?/g, 'z. B. ')
+    .replace(/\bd\.\s?h\.\s?/g, 'd. h. ')
+    .replace(/\bu\.\s?a\.\s?/g, 'u. a. ')
+    .replace(/,(?=[A-Za-zÄÖÜäöüß])/g, ', ')
+    .replace(/\s+([,.;:!?)])/g, '$1')
+    .replace(/[ \t ]{2,}/g, ' ')
+    .replace(/ +$/, '')
+    .trim();
+}
+
+/**
+ * Räumt kopierten PDF-Text auf:
+ *  - Aufzählungszeichen (•, –, -, 1.) einheitlich als „- “
+ *  - Silbentrennung und mitten im Satz umgebrochene Zeilen zusammenführen
+ *  - fehlende Leerzeichen nach Komma und in „z. B.“ ergänzen
+ *  - kurze Zeile direkt vor einer Aufzählung wird Zwischenüberschrift („### “)
+ *  - „Beispiel:“ als eigene Zeile, „##Text“ wird Merksatz
+ * Die erste Zeile wird als Kapitel-Titel vorgeschlagen, wenn sie allein steht.
+ * @returns {{ text: string, titel: string }}
+ */
+export function cleanPdfText(input) {
+  const raw = String(input || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[­​]/g, '')
+    .split('\n')
+    .map((line) => line.replace(/\s+$/, ''));
+
+  // 1. Zeilen vereinheitlichen
+  let lines = raw.map((line) => {
+    let t = line.trim();
+    if (!t) return '';
+    if (/^#{2}(?!#)\s*\S/.test(t)) return `Merksatz: ${fixSpacing(t.replace(/^##\s*/, ''))}`;
+    if (/^#{3,}\s*/.test(t)) return `### ${fixSpacing(t.replace(/^#{3,}\s*/, ''))}`;
+    if (BULLET.test(t) && !/^\d+[.,]\d/.test(t)) {
+      t = t.replace(BULLET, '');
+      if (/^Beispiel:/i.test(t)) return fixSpacing(t);
+      return `- ${fixSpacing(t)}`;
+    }
+    return fixSpacing(t);
+  });
+
+  // 2. Umgebrochene Zeilen zusammenführen
+  const joined = [];
+  for (const line of lines) {
+    const prev = joined[joined.length - 1];
+    if (prev && line && !isMarked(line) && !/^###\s/.test(prev) && !SENTENCE_END.test(prev)) {
+      const lastWord = (prev.match(/([A-Za-zÄÖÜäöüß]+)-?$/) || ['', ''])[1].toLowerCase();
+      const content = line.replace(/^- /, '');
+      const hyphen = /[a-zäöüß]-$/.test(prev) && /^[a-zäöüß]/.test(content);
+      // Satz läuft weiter: Zeile endet mit Bindewort, „&“, Komma oder offener Klammer
+      const afterJoinWord = JOIN_AFTER.has(lastWord) || /[&,(/+]$/.test(prev);
+      // Neuer Aufzählungspunkt bleibt eigenständig, außer der vorige endet mitten im Satz („der“)
+      const newItem = isBullet(line) && !afterJoinWord;
+      if (!newItem && (hyphen || afterJoinWord || /^[a-zäöüß]/.test(content))) {
+        joined[joined.length - 1] = hyphen ? `${prev.slice(0, -1)}${content}` : `${prev} ${content}`;
+        continue;
+      }
+    }
+    joined.push(line);
+  }
+  lines = joined;
+
+  // 3. Zwischenüberschriften: kurze Zeile ohne Satzende direkt vor einer Aufzählung
+  const nextFilled = (i) => {
+    for (let j = i + 1; j < lines.length; j++) if (lines[j]) return lines[j];
+    return '';
+  };
+  lines = lines.map((line, i) => {
+    if (!line || isBullet(line) || isMarked(line)) return line;
+    const short = line.length <= 70 && !/[.!:;,]$/.test(line);
+    return short && isBullet(lines[i + 1] || '') ? `### ${line}` : line;
+  });
+
+  // 4. Erste Zeile allein (danach Leerzeile) als Titel vorschlagen
+  let titel = '';
+  const first = lines.findIndex((l) => l);
+  if (first !== -1) {
+    const line = lines[first];
+    const after = nextFilled(first);
+    if (!isBullet(line) && !isMarked(line) && line.length <= 60 && !/[.!?:;,]$/.test(line) && lines[first + 1] === '' && after) {
+      titel = line;
+      lines.splice(first, 1);
+    }
+  }
+
+  const text = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, titel };
+}

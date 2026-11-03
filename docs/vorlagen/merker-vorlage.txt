@@ -1,0 +1,36 @@
+Fach: ReWe
+Titel: Abschreibungen
+Skript: Folien 40 bis 46
+
+Abkürzungen:
+- AfA: Absetzung für Abnutzung
+
+## Lineare und degressive Abschreibung (Folien 40 bis 43)
+Wann: Beim Kauf einer Maschine, die mehrere Jahre genutzt wird.
+Wofür: Der Wertverlust wird auf die Nutzungsjahre verteilt.
+Warum: Sonst wäre der Gewinn im Kaufjahr zu niedrig.
+
+Begriffe:
+- Lineare Abschreibung: Jedes Jahr derselbe Betrag (Folie 41). | AHK geteilt durch Nutzungsdauer.
+- Degressive Abschreibung: Fester Prozentsatz vom Restbuchwert. | Anfangs hohe, später niedrige Beträge.
+
+Prüfung: Abschreibungsbetrag und Restbuchwert berechnen.
+Zuordnung:
+- Gleicher Betrag jedes Jahr = Lineare Abschreibung
+- Prozentsatz vom Restbuchwert = Degressive Abschreibung
+
+Managementsprache:
+- Die Maschine kostet uns jedes Jahr 2.000 € -> Der Werteverzehr mindert den Gewinn, nicht die Liquidität.
+
+Musterfrage: Warum wird eine Maschine nicht im Kaufjahr voll als Aufwand gebucht?
+Musterantwort: Weil sie mehrere Jahre genutzt wird. Die Abschreibung verteilt den Aufwand auf diese Jahre.
+
+Kernaussage: Abschreibung verteilt den Wertverlust einer Anlage auf ihre Nutzungsdauer.
+Feynman: Erkläre einem Freund, warum ein Unternehmen trotz teurer Maschine Gewinn machen kann.
+Muss:
+- Verteilung auf Nutzungsjahre
+- Aufwand ist nicht gleich Auszahlung
+
+## Nächstes Thema
+Begriffe:
+- Restbuchwert: Wert der Anlage nach den bisherigen Abschreibungen.

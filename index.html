@@ -408,15 +408,27 @@
         <h2 id="import-title">Merker importieren</h2>
         <button class="icon-btn" id="import-cancel" type="button" aria-label="Schließen">✕</button>
       </div>
-      <p class="muted">Wähle die Importdatei (<code>.json</code>) aus oder füge ihren Inhalt ein. Ein vorhandener Merker mit gleicher ID wird ersetzt; ältere Stände bleiben in der Git-Historie.</p>
-      <input id="import-file" type="file" accept=".json,application/json" hidden>
+      <p class="muted">Wähle eine Datei aus oder füge den Inhalt ein: als <strong>Text</strong> im einfachen Format oder als <code>JSON</code>. Die App erkennt beides. Ein vorhandener Merker mit gleicher ID wird ersetzt; ältere Stände bleiben in der Git-Historie.</p>
+      <input id="import-file" type="file" accept=".json,.txt,.md,application/json,text/plain,text/markdown" hidden>
       <div class="form-actions">
         <button class="btn btn-secondary" id="import-choose" type="button">📄 Datei auswählen</button>
+        <button class="btn btn-secondary" id="import-template" type="button">📝 Textvorlage einfügen</button>
       </div>
       <label class="field import-paste">
         <span class="field-label">oder Inhalt einfügen</span>
-        <textarea class="input textarea" id="import-text" rows="4" spellcheck="false" placeholder="{ &quot;id&quot;: … }"></textarea>
+        <textarea class="input textarea import-textarea" id="import-text" rows="8" spellcheck="false" placeholder="Fach: ReWe&#10;Titel: Abschreibungen&#10;&#10;## Erstes Thema&#10;Begriffe:&#10;- Begriff: Erklärung | Funktionsweise&#10;Kernaussage: …"></textarea>
       </label>
+      <details class="import-help">
+        <summary>So funktioniert das Textformat</summary>
+        <ul>
+          <li><strong>Fach:</strong> und <strong>Titel:</strong> oben sind Pflicht, dazu freiwillig <strong>Teil:</strong>, <strong>Skript:</strong>, <strong>Abkürzungen:</strong> und <strong>Quellen:</strong>.</li>
+          <li><strong>## Titel (Folien 3 bis 5)</strong> beginnt ein Thema. Ohne „##“ entsteht ein einziges Thema.</li>
+          <li>Pro Thema: <strong>Wann, Wofür, Warum, Verknüpfung</strong> (Praxisbezug), <strong>Begriffe</strong>, <strong>Prüfung, Zuordnung, Tabelle, Nachtrag</strong>, <strong>Aussagen, Managementsprache, Musterfrage, Hinweis, Musterantwort</strong>, <strong>Kernaussage, Feynman, Muss</strong> und <strong>Abweichungen</strong>.</li>
+          <li>Listen mit „- “: Begriffe als <code>- Begriff: Erklärung | Funktionsweise</code>, Zuordnungen als <code>- Frage = Antwort</code>, Managementsprache als <code>- Hallensprache -&gt; Managementsprache</code>.</li>
+          <li>Tabellen mit senkrechten Strichen: erste Zeile sind die Spalten, z. B. <code>| Jahr | Betrag |</code>.</li>
+          <li>Text über mehrere Zeilen gehört zum Feld darüber. <code>**fett**</code> und „(Folie 9)“ funktionieren wie gewohnt.</li>
+        </ul>
+      </details>
       <div id="import-preview"></div>
       <p class="settings-message" id="import-status" role="status" hidden></p>
       <div class="form-actions">

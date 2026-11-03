@@ -38,6 +38,7 @@ import {
 } from './wissen-data.js';
 import { getEntry } from './progress.js';
 import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
+import { textToMerker, looksLikeMerkerText, MERKER_TEXT_VORLAGE } from './merker-text.js';
 
 const PREFS_KEY = 'lernkartei.wissen.prefs';
 const ALL = 'alle';
@@ -1329,8 +1330,12 @@ function openImport() {
   openModal($('import-modal'), $('import-choose'));
 }
 
-/** Akzeptiert einen Merker, eine Liste oder { merker: [...] }. */
+/** Akzeptiert Text im einfachen Format, einen Merker, eine Liste oder { merker: [...] }. */
 function parseImport(text) {
+  if (looksLikeMerkerText(text)) {
+    const { raw, unassigned } = textToMerker(text);
+    return [{ raw, merker: normalizeMerker(raw), unassigned, fromText: true }];
+  }
   let data;
   try {
     data = JSON.parse(text);
@@ -1368,7 +1373,14 @@ function checkImport(text) {
     );
     $('import-preview').append(row);
   }
-  setImportStatus('Geprüft. Alles in Ordnung.', 'success');
+  const fromText = importCandidates.some((c) => c.fromText);
+  const unassigned = importCandidates.flatMap((c) => c.unassigned || []);
+  if (unassigned.length) {
+    const shown = unassigned.slice(0, 3).map((line) => `„${line.length > 50 ? `${line.slice(0, 50)}…` : line}“`).join(', ');
+    setImportStatus(`Aus Text erstellt. Nicht zugeordnet (fehlt davor ein Feld wie „Begriffe:“?): ${shown}${unassigned.length > 3 ? ` und ${unassigned.length - 3} weitere` : ''}`, 'error');
+  } else {
+    setImportStatus(fromText ? 'Aus Text erstellt und geprüft. Alles in Ordnung.' : 'Geprüft. Alles in Ordnung.', 'success');
+  }
   $('import-confirm').disabled = false;
 }
 
@@ -1472,7 +1484,20 @@ export function initWissen(options) {
     $('import-text').value = text;
     checkImport(text);
   });
-  $('import-text').addEventListener('input', (event) => checkImport(event.target.value));
+  let importTimer = null;
+  $('import-text').addEventListener('input', (event) => {
+    clearTimeout(importTimer);
+    importTimer = setTimeout(() => checkImport(event.target.value), 250);
+  });
+  $('import-template').addEventListener('click', () => {
+    const area = $('import-text');
+    if (area.value.trim() && !window.confirm('Den eingefügten Inhalt durch die Textvorlage ersetzen?')) return;
+    area.value = MERKER_TEXT_VORLAGE;
+    checkImport(area.value);
+    area.focus();
+    area.setSelectionRange(0, 0);
+    area.scrollTop = 0;
+  });
   $('import-confirm').addEventListener('click', confirmImport);
   $('import-cancel').addEventListener('click', () => closeModal($('import-modal')));
   closeOnBackdropClick($('import-modal'));

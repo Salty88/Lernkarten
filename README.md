@@ -20,7 +20,7 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
   - **Suche** über Begriffe, Kürzel, Themen, Musterantworten und Managementsprache. Gibt es einen Begriff noch nicht, lässt er sich direkt als Entwurf anlegen.
   - **Automatische Verlinkung:** Bekannte Begriffe und Kürzel (z. B. KLR, GuV) sind im Text unterstrichen; Antippen zeigt Kurzerklärung, Funktionsweise und Fundstelle.
   - **Herkunfts-Markierungen** aus den Merkern werden farbig angezeigt: Folie und Gesetz neutral, Ergänzung blau, Nicht belegt und Fiktiv gelb, Korrektur rot.
-  - **Import** von Merkern als JSON-Datei.
+  - **Import** von Merkern als JSON-Datei oder als **Text im einfachen Format** („Fach:“, „Titel:“, „## Thema“, „Begriffe:“ …); die App wandelt den Text selbst um und nennt Zeilen, die sie keinem Feld zuordnen konnte. Vorlagen: `docs/vorlagen/merker-vorlage.txt` (Text) und `docs/vorlagen/merker-vorlage.json`.
 - **Lücken:** Begriff oder Frage eintragen und prüfen.
   - Wissen und Lernkarte vorhanden: Erklärung und Verknüpfung werden als Text angezeigt (z. B. „Lernkarte #0042 ↔ ReWe › … › Aufwand“).
   - Nur Wissen vorhanden: Lernkarte daraus erstellen und verknüpfen.
@@ -48,6 +48,7 @@ js/wissen.js          Oberfläche des Nachschlagewerks (Themen, Register, Eigene
 js/luecken.js         Reiter „Lücken“: prüfen, Lernkarte erstellen oder verknüpfen, offene Lücken
 js/practice.js        Reiter „Üben“: Tagesauswahl, Mischen, Übungsformen, Tipps und Verweise
 js/progress.js        Lernstand (Leitner) in lernstand.json, konfliktsicher über mehrere Geräte
+js/merker-text.js     Merker aus dem einfachen Textformat erzeugen (Import)
 js/wissen-data.js     Fächer, Laden und Prüfen der Merker, Begriffsverzeichnis, Verlinkung, Suche
 js/richtext.js        Textdarstellung: Absätze, Aufzählungen, fett, Herkunfts-Markierungen
 js/ui.js              Gemeinsame Bausteine: Elemente, Toasts, Dialoge

@@ -2675,3 +2675,11 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 }
 .fach-rest { margin-top: 22px; line-height: 1.5; }
 .fach-rest-label { font-weight: 650; }
+
+/* Import: Textformat */
+.import-textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; line-height: 1.45; }
+.import-help { margin: 4px 0 12px; font-size: 0.88rem; }
+.import-help > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.import-help ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+.import-help li + li { margin-top: 6px; }
+.import-help code { overflow-wrap: anywhere; }

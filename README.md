@@ -16,6 +16,7 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
   - **Fach-Knopf** wie beim Üben; Fächer ohne Merker stehen bei „Alle Fächer“ gesammelt in einer Zeile.
   - **Themen:** Merker je Fach mit Miniblöcken und den sechs Bezügen (Praxisbezug, Glossar, Prüfungsbezug, Managementsprache, Abschluss, Abweichungen). Jede Merker-Karte zeigt „📈 x % sicher“: Anteil ihrer Lernkarten ab Stufe 3 im eigenen Lernstand. Merker mit nur einem Thema erscheinen ohne Sprungmarke und ohne doppelten Titel.
   - **A–Z:** Register aller Begriffe und eigenen Einträge.
+  - **Skripte:** Lesetexte zum schnellen Nachlesen, je Fach und in Kapitel gegliedert, mit Inhaltsverzeichnis, Lesezeit und automatisch verlinkten Begriffen. Anlegen und Bearbeiten im einfachen Textformat (`Fach:`, `Titel:`, `## Kapitel (Folien 1 bis 6)`, `### Zwischenüberschrift`); die Suche findet auch Text in Skripten. Gespeichert als `skripte/<id>.json` im Daten-Repository.
   - **Eigene:** eigene Einträge mit Erklärung, Beispiel und Bildern; Entwürfe sammeln sich unter „Offen“.
   - **Suche** über Begriffe, Kürzel, Themen, Musterantworten und Managementsprache. Gibt es einen Begriff noch nicht, lässt er sich direkt als Entwurf anlegen.
   - **Automatische Verlinkung:** Bekannte Begriffe und Kürzel (z. B. KLR, GuV) sind im Text unterstrichen; Antippen zeigt Kurzerklärung, Funktionsweise und Fundstelle.
@@ -49,6 +50,7 @@ js/luecken.js         Reiter „Lücken“: prüfen, Lernkarte erstellen oder ve
 js/practice.js        Reiter „Üben“: Tagesauswahl, Mischen, Übungsformen, Tipps und Verweise
 js/progress.js        Lernstand (Leitner) in lernstand.json, konfliktsicher über mehrere Geräte
 js/merker-text.js     Merker aus dem einfachen Textformat erzeugen (Import)
+js/skript-text.js     Skripte im einfachen Textformat lesen und schreiben
 js/wissen-data.js     Fächer, Laden und Prüfen der Merker, Begriffsverzeichnis, Verlinkung, Suche
 js/richtext.js        Textdarstellung: Absätze, Aufzählungen, fett, Herkunfts-Markierungen
 js/ui.js              Gemeinsame Bausteine: Elemente, Toasts, Dialoge
@@ -62,6 +64,7 @@ cards.json            Lernkarten (mit Nummer "nr" und optionaler Verknüpfung "q
 lernstoff.json        Eigene Einträge im Nachschlagewerk
 lernstand/<name>.json Lernstand je Person: je Karte Stufe, fällig am, richtig/falsch; Tageszähler je Gerät
 lernstand.json        (alt) gemeinsamer Lernstand der ersten Version; wird beim Besitzer einmalig übernommen
+skripte/<id>.json     Ein Skript pro Datei (Kapitel mit Titel, Folien und Text)
 merker/<id>.json      Ein Merker pro Datei (z. B. merker/rewe-1-externes-rechnungswesen.json)
 images/               Bilder der eigenen Einträge
 ```

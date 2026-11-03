@@ -15,6 +15,7 @@ import {
   getTextFile,
   putTextFile,
   listDirectory,
+  deleteFile,
 } from './github-sync.js';
 import { el, norm } from './ui.js';
 import { plainText } from './richtext.js';
@@ -159,6 +160,33 @@ export function normalizeMerker(raw) {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Skripte: Lesetexte je Fach, gegliedert in Kapitel                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Prüft ein Skript und bringt es in eine verlässliche Form.
+ * Format: { schema, id, fach, titel, teil, kapitel: [{ id, titel, folien, text }] }
+ * @throws {Error} mit verständlicher Meldung
+ */
+export function normalizeSkript(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Kein gültiges Skript (Objekt erwartet).');
+  const id = str(raw.id).trim();
+  if (!/^[a-z0-9][a-z0-9-]{1,80}$/.test(id)) throw new Error('Die Skript-ID fehlt oder enthält ungültige Zeichen (erlaubt: a-z, 0-9, Bindestrich).');
+  if (!str(raw.titel).trim()) throw new Error(`Skript „${id}“: Titel fehlt.`);
+  const kapitel = objList(raw.kapitel)
+    .map((k, i) => ({ id: str(k.id) || `k${i + 1}`, titel: str(k.titel).trim() || `Kapitel ${i + 1}`, folien: str(k.folien), text: str(k.text) }))
+    .filter((k) => k.text.trim() || k.titel);
+  if (!kapitel.length) throw new Error(`Skript „${id}“: keine Kapitel enthalten.`);
+  return { schema: 1, id, fach: fachKey(raw.fach), titel: str(raw.titel).trim(), teil: str(raw.teil), kapitel };
+}
+
+/** Umfang eines Skripts: Kapitel, Wörter und geschätzte Lesezeit (ca. 200 Wörter pro Minute). */
+export function skriptStats(skript) {
+  const woerter = skript.kapitel.reduce((n, k) => n + (plainText(k.text).match(/\S+/g) || []).length, 0);
+  return { kapitel: skript.kapitel.length, woerter, minuten: Math.max(1, Math.round(woerter / 200)) };
+}
+
 export function merkerStats(merker) {
   return {
     themen: merker.bloecke.length,
@@ -209,6 +237,8 @@ function parseEntries(text) {
 export const store = {
   merker: [], // normalisierte Merker
   merkerFiles: new Map(), // Pfad → { sha, data }
+  skripte: [], // normalisierte Skripte
+  skriptFiles: new Map(), // Pfad → { sha, data }
   eigene: [],
   eigeneSha: null,
   loaded: false,
@@ -217,6 +247,7 @@ export const store = {
 
 export const paths = {
   merkerDir: (settings) => `${dataDir(settings)}merker/`,
+  skriptDir: (settings) => `${dataDir(settings)}skripte/`,
   eigene: (settings) => `${dataDir(settings)}lernstoff.json`,
   images: (settings) => `${dataDir(settings)}images/`,
 };
@@ -237,6 +268,7 @@ function writeCache(settings) {
       JSON.stringify({
         target: settingsTarget(settings),
         merker: [...store.merkerFiles.entries()],
+        skripte: [...store.skriptFiles.entries()],
         eigene: store.eigene,
         eigeneSha: store.eigeneSha,
       }),
@@ -273,6 +305,23 @@ function rebuildMerkerList() {
   announceChange();
 }
 
+function rebuildSkriptList() {
+  const list = [];
+  for (const { data } of store.skriptFiles.values()) {
+    try {
+      list.push(normalizeSkript(data));
+    } catch {
+      /* fehlerhafte Datei überspringen */
+    }
+  }
+  const fachOrder = (x) => {
+    const i = FAECHER.findIndex((f) => f.id === x.fach);
+    return i === -1 ? 99 : i;
+  };
+  list.sort((a, b) => fachOrder(a) - fachOrder(b) || a.titel.localeCompare(b.titel, 'de', { numeric: true }));
+  store.skripte = list;
+}
+
 /** Teilt anderen Ansichten (Lernkarten, Lücken) mit, dass sich das Wissen geändert hat. */
 function announceChange() {
   document.dispatchEvent(new CustomEvent('wissen:changed'));
@@ -281,15 +330,40 @@ function announceChange() {
 /** Stellt den zuletzt geladenen Stand dieses Geräts wieder her (offline lesbar). */
 export function restoreWissen(settings) {
   store.merkerFiles = new Map();
+  store.skriptFiles = new Map();
   store.eigene = [];
   store.eigeneSha = null;
   const cache = readCache(settings);
   if (cache) {
     store.merkerFiles = new Map(Array.isArray(cache.merker) ? cache.merker : []);
+    store.skriptFiles = new Map(Array.isArray(cache.skripte) ? cache.skripte : []);
     store.eigene = Array.isArray(cache.eigene) ? cache.eigene.map(normalizeEntry) : [];
     store.eigeneSha = cache.eigeneSha || null;
   }
+  rebuildSkriptList();
   rebuildMerkerList();
+}
+
+/** Lädt alle JSON-Dateien eines Ordners; unveränderte (gleiche SHA) kommen aus dem Zwischenspeicher. */
+async function loadJsonDir(settings, dir, known, validate, fehler) {
+  const listing = await listDirectory(settings, dir);
+  const next = new Map();
+  for (const file of listing.filter((f) => f.type === 'file' && f.name.endsWith('.json'))) {
+    const cached = known.get(file.path);
+    if (cached && cached.sha === file.sha) {
+      next.set(file.path, cached);
+      continue;
+    }
+    const { text, sha } = await getTextFile(settings, file.path);
+    try {
+      const data = JSON.parse(text || '');
+      validate(data); // nur prüfen
+      next.set(file.path, { sha, data });
+    } catch (err) {
+      fehler.push(`${file.name}: ${err.message}`);
+    }
+  }
+  return next;
 }
 
 /**
@@ -299,26 +373,9 @@ export function restoreWissen(settings) {
  */
 export async function loadWissen(settings) {
   const fehler = [];
-  const listing = await listDirectory(settings, paths.merkerDir(settings));
-  const files = listing.filter((f) => f.type === 'file' && f.name.endsWith('.json'));
-  const next = new Map();
-
-  for (const file of files) {
-    const cached = store.merkerFiles.get(file.path);
-    if (cached && cached.sha === file.sha) {
-      next.set(file.path, cached);
-      continue;
-    }
-    const { text, sha } = await getTextFile(settings, file.path);
-    try {
-      const data = JSON.parse(text || '');
-      normalizeMerker(data); // nur prüfen
-      next.set(file.path, { sha, data });
-    } catch (err) {
-      fehler.push(`${file.name}: ${err.message}`);
-    }
-  }
-  store.merkerFiles = next;
+  store.merkerFiles = await loadJsonDir(settings, paths.merkerDir(settings), store.merkerFiles, normalizeMerker, fehler);
+  store.skriptFiles = await loadJsonDir(settings, paths.skriptDir(settings), store.skriptFiles, normalizeSkript, fehler);
+  rebuildSkriptList();
 
   const eigene = await getTextFile(settings, paths.eigene(settings));
   store.eigene = parseEntries(eigene.text);
@@ -347,6 +404,40 @@ export async function saveMerker(settings, merker, rawData) {
   store.merkerFiles.set(path, { sha, data: rawData });
   rebuildMerkerList();
   writeCache(settings);
+}
+
+/** Schreibt ein Skript nach skripte/<id>.json. */
+export async function saveSkript(settings, skript, rawData) {
+  const path = `${paths.skriptDir(settings)}${skript.id}.json`;
+  const existing = store.skriptFiles.get(path);
+  const text = `${JSON.stringify(rawData, null, 2)}\n`;
+  const message = `${existing ? 'Skript aktualisiert' : 'Skript hinzugefügt'}: ${skript.titel}`;
+  let sha;
+  try {
+    sha = await putTextFile(settings, path, text, existing ? existing.sha : null, message);
+  } catch (err) {
+    if (!(err instanceof SyncError) || err.code !== 'conflict') throw err;
+    const current = await getTextFile(settings, path);
+    sha = await putTextFile(settings, path, text, current.sha, message);
+  }
+  store.skriptFiles.set(path, { sha, data: rawData });
+  rebuildSkriptList();
+  writeCache(settings);
+  announceChange();
+}
+
+export async function removeSkript(settings, id) {
+  const path = `${paths.skriptDir(settings)}${id}.json`;
+  const skript = store.skripte.find((x) => x.id === id);
+  await deleteFile(settings, path, `Skript gelöscht: ${skript ? skript.titel : id}`);
+  store.skriptFiles.delete(path);
+  rebuildSkriptList();
+  writeCache(settings);
+  announceChange();
+}
+
+export function skriptPathExists(settings, id) {
+  return store.skriptFiles.has(`${paths.skriptDir(settings)}${id}.json`);
 }
 
 export function merkerPathExists(settings, id) {
@@ -597,6 +688,17 @@ function searchDocs() {
       }
     }
   }
+  for (const skript of store.skripte) {
+    for (const kapitel of skript.kapitel) {
+      docs.push({
+        type: 'skript',
+        target: { skript, kapitel },
+        title: norm(kapitel.titel),
+        keys: [],
+        body: norm(`${plainText(kapitel.text)} ${skript.titel}`),
+      });
+    }
+  }
   for (const entry of store.eigene) {
     docs.push({
       type: 'eigen',
@@ -609,7 +711,7 @@ function searchDocs() {
   return docs;
 }
 
-let docCache = { index: null, eigene: null, docs: [] };
+let docCache = { index: null, eigene: null, skripte: null, docs: [] };
 
 /**
  * Durchsucht alles und liefert Treffer nach Relevanz.
@@ -618,8 +720,8 @@ let docCache = { index: null, eigene: null, docs: [] };
 export function search(query, filter = () => true) {
   const terms = norm(query).split(/\s+/).filter(Boolean);
   if (!terms.length || !store.index) return [];
-  if (docCache.index !== store.index || docCache.eigene !== store.eigene) {
-    docCache = { index: store.index, eigene: store.eigene, docs: searchDocs() };
+  if (docCache.index !== store.index || docCache.eigene !== store.eigene || docCache.skripte !== store.skripte) {
+    docCache = { index: store.index, eigene: store.eigene, skripte: store.skripte, docs: searchDocs() };
   }
   return docCache.docs
     .filter(filter)

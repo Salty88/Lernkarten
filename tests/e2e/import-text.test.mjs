@@ -26,7 +26,8 @@ try {
   await page.click('#import-confirm');
   await page.waitForSelector('#import-modal', { state: 'hidden' });
   await page.waitForTimeout(300);
-  check('Merker gespeichert', Object.keys(app.repo.files || {}).some((p) => p.includes('merker/pm-fuhrung.json')) || (await page.textContent('#w-content')).includes('Führung'), Object.keys(app.repo.files || {}).join(', '));
+  const saved = [...app.repo.files.keys()].filter((p) => p.startsWith('merker/pm-'));
+  check('Merker im Daten-Repository gespeichert', saved.length === 1 && JSON.parse(app.repo.text(saved[0])).titel === 'Führung', saved.join(', '));
   check('Merker wird angezeigt', (await page.textContent('#w-content')).includes('Kooperativ'));
   check('Keine JavaScript-Fehler', app.errors.length === 0, app.errors.join('; '));
 } catch (e) {

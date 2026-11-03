@@ -2683,3 +2683,64 @@ details.gap-suggestions > summary { cursor: pointer; margin-bottom: 8px; }
 .import-help ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
 .import-help li + li { margin-top: 6px; }
 .import-help code { overflow-wrap: anywhere; }
+
+/* ---------- Wissen: Skripte ---------- */
+
+.skript-list .fach-group-title { margin-top: 18px; }
+.skript-list .eigene-bar + .fach-group-title { margin-top: 0; }
+.skript-card .merker-card-stats { margin-top: 4px; }
+
+.skript-actions { justify-content: flex-start; margin-top: 12px; }
+
+.skript-toc {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.skript-toc-title { margin: 2px 4px 6px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.skript-toc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.skript-toc-title + .skript-toc-item { border-top: 0; }
+.skript-toc-nr {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.skript-toc-name { flex: 1; min-width: 0; font-weight: 600; line-height: 1.3; }
+.skript-toc-folien { flex-shrink: 0; font-size: 0.78rem; color: var(--muted); }
+
+.skript-kapitel { margin-bottom: 14px; scroll-margin-top: calc(env(safe-area-inset-top) + 16px); }
+.skript-kapitel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.skript-kapitel-title { font-size: 1.08rem; line-height: 1.3; }
+.skript-kapitel .rich { font-size: 1.02rem; line-height: 1.65; overflow-wrap: anywhere; }
+.skript-kapitel .rich p { margin-bottom: 12px; }
+.skript-kapitel .rich ul { margin-bottom: 12px; }
+.skript-kapitel .rich li + li { margin-top: 4px; }
+
+#view-wissen .wissen-bar { flex-wrap: nowrap; }
+#view-wissen .segmented { display: flex; flex-wrap: nowrap; flex: 1 1 auto; width: 100%; min-width: 0; }
+#view-wissen .segmented .seg { flex: 1 1 0; min-width: 0; padding: 6px 4px; white-space: nowrap; }

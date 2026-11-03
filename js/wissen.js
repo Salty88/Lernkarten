@@ -22,6 +22,11 @@ import {
   fachName,
   normalizeMerker,
   merkerStats,
+  normalizeSkript,
+  skriptStats,
+  saveSkript,
+  removeSkript,
+  skriptPathExists,
   isDraft,
   restoreWissen,
   loadWissen,
@@ -39,6 +44,7 @@ import {
 import { getEntry } from './progress.js';
 import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
 import { textToMerker, looksLikeMerkerText, MERKER_TEXT_VORLAGE } from './merker-text.js';
+import { textToSkript, skriptToText, SKRIPT_TEXT_VORLAGE } from './skript-text.js';
 
 const PREFS_KEY = 'lernkartei.wissen.prefs';
 const ALL = 'alle';
@@ -89,6 +95,7 @@ const ws = {
   openMerkerId: null,
   openBlocks: new Set(),
   openEntries: new Set(),
+  openSkriptId: null,
   eigeneFilter: ALL,
   syncing: false,
 };
@@ -99,7 +106,7 @@ const linker = createLinker((target) => openSheet(target));
 function loadPrefs() {
   try {
     const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-    if (['themen', 'register', 'eigene'].includes(prefs.mode)) ws.mode = prefs.mode;
+    if (['themen', 'register', 'eigene', 'skripte'].includes(prefs.mode)) ws.mode = prefs.mode;
     if (typeof prefs.fach === 'string') ws.fach = prefs.fach;
   } catch {
     /* Standardwerte behalten */
@@ -174,6 +181,7 @@ export function renderWissen() {
   if (ws.query.trim()) content.append(renderSearch());
   else if (ws.mode === 'register') content.append(renderRegister());
   else if (ws.mode === 'eigene') content.append(renderEigene());
+  else if (ws.mode === 'skripte') content.append(ws.openSkriptId ? renderSkriptView() : renderSkriptList());
   else content.append(ws.openMerkerId ? renderMerkerView() : renderMerkerList());
 }
 
@@ -188,7 +196,7 @@ function fachCounts() {
 
 function fachOptions() {
   const counts = fachCounts();
-  const withMerker = new Set(store.merker.map((m) => m.fach));
+  const withMerker = new Set([...store.merker.map((m) => m.fach), ...store.skripte.map((x) => x.fach)]);
   const extra = [...new Set([...counts.keys(), ...withMerker])].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
   const keys = [ALL, ...FAECHER.map((f) => f.id), ...extra];
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
@@ -214,6 +222,10 @@ function setFach(key) {
   if (ws.openMerkerId && ws.fach !== ALL) {
     const open = store.merker.find((m) => m.id === ws.openMerkerId);
     if (!open || open.fach !== ws.fach) ws.openMerkerId = null;
+  }
+  if (ws.openSkriptId && ws.fach !== ALL) {
+    const open = store.skripte.find((x) => x.id === ws.openSkriptId);
+    if (!open || open.fach !== ws.fach) ws.openSkriptId = null;
   }
   savePrefs();
   renderWissen();
@@ -780,6 +792,215 @@ function renderRegister() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Skripte: Lesetexte je Fach                                          */
+/* ------------------------------------------------------------------ */
+
+function skriptMeta(skript) {
+  const stats = skriptStats(skript);
+  return `${plural(stats.kapitel, 'Kapitel', 'Kapitel')} · ≈ ${stats.minuten} Min. lesen`;
+}
+
+function renderSkriptList() {
+  const wrap = el('div', 'skript-list');
+  const bar = el('div', 'eigene-bar');
+  bar.append(
+    el('p', 'muted small', plural(store.skripte.filter((x) => matchesFach(x.fach)).length, 'Skript', 'Skripte')),
+    button('btn btn-small btn-primary', '＋ Skript hinzufügen', () => openSkriptEditor(null)),
+  );
+  wrap.append(bar);
+
+  const list = store.skripte.filter((x) => matchesFach(x.fach));
+  if (!list.length) {
+    const empty = emptyState(
+      '📖',
+      ws.fach === ALL ? 'Noch keine Skripte' : `Noch keine Skripte in ${fachLabel(ws.fach)}`,
+      'Lege Lesetexte zum schnellen Nachlesen an: Kapitel für Kapitel, in deinen eigenen Worten. Begriffe aus deinen Merkern werden darin automatisch verlinkt.',
+    );
+    wrap.append(empty);
+    return wrap;
+  }
+
+  let currentFach = null;
+  for (const skript of list) {
+    if (ws.fach === ALL && skript.fach !== currentFach) {
+      currentFach = skript.fach;
+      const head = el('h3', 'fach-group-title');
+      head.append(el('span', 'fach-group-kurz', fachLabel(skript.fach)), document.createTextNode(fachName(skript.fach)));
+      wrap.append(head);
+    }
+    const card = button('merker-card skript-card', null, () => openSkript(skript.id));
+    card.append(el('span', 'merker-card-title', skript.titel));
+    if (skript.teil) card.append(el('span', 'merker-card-teil', skript.teil));
+    card.append(el('span', 'merker-card-stats', skriptMeta(skript)));
+    wrap.append(card);
+  }
+  return wrap;
+}
+
+/** Öffnet ein Skript, optional direkt an einem Kapitel. */
+export function openSkript(skriptId, kapitelId = null) {
+  ws.mode = 'skripte';
+  ws.query = '';
+  $('w-search').value = '';
+  ws.openSkriptId = skriptId;
+  savePrefs();
+  closeModal($('term-sheet'));
+  document.dispatchEvent(new CustomEvent('wissen:show'));
+  renderWissen();
+  requestAnimationFrame(() => {
+    const target = kapitelId ? document.getElementById(`skript-${skriptId}-${kapitelId}`) : $('w-content');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function renderSkriptView() {
+  const skript = store.skripte.find((x) => x.id === ws.openSkriptId);
+  if (!skript) {
+    ws.openSkriptId = null;
+    return renderSkriptList();
+  }
+  const wrap = el('div', 'skript-view');
+  wrap.append(
+    button('btn btn-small btn-secondary back-btn', '‹ Alle Skripte', () => {
+      ws.openSkriptId = null;
+      renderWissen();
+    }),
+  );
+
+  const head = el('header', 'panel merker-head');
+  const meta = el('div', 'merker-meta');
+  meta.append(fachBadge(skript.fach), el('span', 'merker-kontext', skriptMeta(skript)));
+  head.append(meta, el('h2', 'merker-title', skript.titel));
+  if (skript.teil) head.append(el('p', 'merker-teil', skript.teil));
+  const actions = el('div', 'list-actions skript-actions');
+  actions.append(
+    button('btn btn-small btn-secondary', '✎ Bearbeiten', () => openSkriptEditor(skript.id)),
+    button('btn btn-small btn-ghost-danger', '🗑 Löschen', () => deleteSkript(skript)),
+  );
+  head.append(actions);
+  wrap.append(head);
+
+  if (skript.kapitel.length > 1) {
+    const toc = el('nav', 'skript-toc');
+    toc.setAttribute('aria-label', 'Inhalt');
+    toc.append(el('p', 'skript-toc-title', 'Inhalt'));
+    skript.kapitel.forEach((k, i) => {
+      const item = button('skript-toc-item', null, () => {
+        const target = document.getElementById(`skript-${skript.id}-${k.id}`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      item.append(el('span', 'skript-toc-nr', String(i + 1)), el('span', 'skript-toc-name', k.titel));
+      if (k.folien) item.append(el('span', 'skript-toc-folien', k.folien));
+      toc.append(item);
+    });
+    wrap.append(toc);
+  }
+
+  skript.kapitel.forEach((k, i) => {
+    const section = el('section', 'panel skript-kapitel');
+    section.id = `skript-${skript.id}-${k.id}`;
+    const h = el('header', 'skript-kapitel-head');
+    const titleWrap = el('div', 'block-head');
+    titleWrap.append(el('h3', 'skript-kapitel-title', k.titel));
+    if (k.folien) titleWrap.append(el('span', 'block-folien', k.folien));
+    h.append(el('span', 'block-id', String(i + 1)), titleWrap);
+    section.append(h);
+    if (k.text.trim()) section.append(renderRich(k.text, linkCtx({ fach: skript.fach })));
+    wrap.append(section);
+  });
+  return wrap;
+}
+
+let skriptEditor = { id: null, candidate: null };
+
+function setSkriptStatus(text, type = 'info') {
+  const box = $('skript-status');
+  box.textContent = text;
+  box.dataset.type = type;
+  box.hidden = !text;
+}
+
+function checkSkript(text) {
+  skriptEditor.candidate = null;
+  $('skript-preview').replaceChildren();
+  $('skript-save').disabled = true;
+  if (!text.trim()) {
+    setSkriptStatus('');
+    return;
+  }
+  try {
+    const raw = textToSkript(text, { id: skriptEditor.id || undefined });
+    const skript = normalizeSkript(raw);
+    skriptEditor.candidate = { raw, skript };
+    const row = el('div', 'import-row');
+    const top = el('span', 'reg-top');
+    top.append(fachBadge(skript.fach), el('span', 'reg-title', skript.titel));
+    row.append(top, el('span', 'reg-sub', `${skript.teil ? `${skript.teil} · ` : ''}${skriptMeta(skript)}`));
+    row.append(el('span', 'reg-sub', skript.kapitel.map((k, i) => `${i + 1}. ${k.titel}`).join(' · ')));
+    $('skript-preview').append(row);
+    setSkriptStatus('Geprüft. Alles in Ordnung.', 'success');
+    $('skript-save').disabled = false;
+  } catch (err) {
+    setSkriptStatus(err.message, 'error');
+  }
+}
+
+export function openSkriptEditor(id) {
+  const existing = id ? store.skripte.find((x) => x.id === id) : null;
+  skriptEditor = { id: existing ? existing.id : null, candidate: null };
+  $('skript-modal-title').textContent = existing ? 'Skript bearbeiten' : 'Skript hinzufügen';
+  const preset = !existing && ws.fach !== ALL ? `Fach: ${fachLabel(ws.fach)}\nTitel: \n\n## \n` : '';
+  $('skript-text').value = existing ? skriptToText(existing, fachLabel(existing.fach)) : preset;
+  if (existing) checkSkript($('skript-text').value);
+  else {
+    $('skript-preview').replaceChildren();
+    $('skript-save').disabled = true;
+    setSkriptStatus('');
+  }
+  openModal($('skript-modal'), $('skript-text'));
+}
+
+async function saveSkriptFromEditor() {
+  const settings = getSettings();
+  if (!hasValidSettings(settings)) {
+    setSkriptStatus('Bitte zuerst die GitHub-Verbindung einrichten (unter „Mehr“).', 'error');
+    return;
+  }
+  const { candidate } = skriptEditor;
+  if (!candidate) return;
+  if (!skriptEditor.id && skriptPathExists(settings, candidate.skript.id)) {
+    if (!window.confirm(`Es gibt schon ein Skript „${candidate.skript.titel}“. Ersetzen?`)) return;
+  }
+  const btn = $('skript-save');
+  btn.disabled = true;
+  btn.textContent = 'Speichere …';
+  try {
+    await saveSkript(settings, candidate.skript, candidate.raw);
+    closeModal($('skript-modal'));
+    showToast(skriptEditor.id ? 'Skript gespeichert' : 'Skript hinzugefügt', 'success');
+    ws.fach = ws.fach === ALL ? ALL : candidate.skript.fach;
+    openSkript(candidate.skript.id);
+  } catch (err) {
+    setSkriptStatus(`Speichern fehlgeschlagen: ${errorText(err)}`, 'error');
+    btn.disabled = false;
+  } finally {
+    btn.textContent = 'Speichern';
+  }
+}
+
+async function deleteSkript(skript) {
+  if (!window.confirm(`Skript „${skript.titel}“ löschen? Ältere Stände bleiben in der Git-Historie.`)) return;
+  try {
+    await removeSkript(getSettings(), skript.id);
+    ws.openSkriptId = null;
+    renderWissen();
+    showToast('Skript gelöscht', 'success');
+  } catch (err) {
+    showToast(`Löschen fehlgeschlagen: ${errorText(err)}`, 'error');
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Suche                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -790,11 +1011,13 @@ const RESULT_GROUPS = [
   ['frage', 'Musterantworten'],
   ['halle', 'Managementsprache'],
   ['eigen', 'Eigene Einträge'],
+  ['skript', 'Skripte'],
 ];
 
 function docFach(doc) {
   if (doc.type === 'eigen') return fachKey(doc.target.fach);
   if (doc.type === 'begriff' || doc.type === 'kuerzel') return doc.target.fach;
+  if (doc.type === 'skript') return doc.target.skript.fach;
   return doc.target.merker.fach;
 }
 
@@ -828,6 +1051,11 @@ function resultRow(doc) {
       title = `„${t.uebersetzung.halle}“`;
       sub = plainText(t.uebersetzung.management);
       open = () => openMerker(t.merker.id, t.block.id);
+      break;
+    case 'skript':
+      title = t.kapitel.titel;
+      sub = t.skript.titel;
+      open = () => openSkript(t.skript.id, t.kapitel.id);
       break;
     default:
       title = t.titel;
@@ -1501,6 +1729,25 @@ export function initWissen(options) {
   $('import-confirm').addEventListener('click', confirmImport);
   $('import-cancel').addEventListener('click', () => closeModal($('import-modal')));
   closeOnBackdropClick($('import-modal'));
+
+  // Skripte
+  let skriptTimer = null;
+  $('skript-text').addEventListener('input', (event) => {
+    clearTimeout(skriptTimer);
+    skriptTimer = setTimeout(() => checkSkript(event.target.value), 250);
+  });
+  $('skript-template').addEventListener('click', () => {
+    const area = $('skript-text');
+    if (area.value.trim() && !window.confirm('Den Inhalt durch die Vorlage ersetzen?')) return;
+    area.value = SKRIPT_TEXT_VORLAGE;
+    checkSkript(area.value);
+    area.focus();
+    area.setSelectionRange(0, 0);
+    area.scrollTop = 0;
+  });
+  $('skript-save').addEventListener('click', saveSkriptFromEditor);
+  $('skript-cancel').addEventListener('click', () => closeModal($('skript-modal')));
+  closeOnBackdropClick($('skript-modal'));
 
   // Lightbox
   $('lightbox').addEventListener('click', () => closeModal($('lightbox')));

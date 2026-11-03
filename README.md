@@ -11,9 +11,10 @@ Die App ist eine reine statische Website ohne Backend und ohne Build-Schritt. Al
   - **Freies Üben** mit zusätzlichem Themenfilter.
   - **Übungsformen:** Multiple Choice (Begriff → Erklärung), Begriff erkennen (Erklärung → Begriff), Klassisch (umdrehen, selbst bewerten). „Gemischt“ wählt je nach Lernstand: neue Karten eher Multiple Choice, sichere eher klassisch. Falsche Antwortmöglichkeiten stammen aus demselben Thema.
   - **Übungsplan:** neue Karten pro Tag und Karten pro Sitzung einstellbar (pro Gerät).
-- **Erstellen:** Karten anlegen, bearbeiten und löschen (mit „Rückgängig“ im Hinweis), Fach-Vorschläge, Filter und Zähler.
+- **Erstellen:** Register aller Karten mit Kartenzahl, Fach-Knopf („ReWe ▼“), Suche nach Text oder Nummer und Buchstabenleiste A–Z (leere Buchstaben ausgegraut, Antippen springt). Einsortiert wird nach dem eigentlichen Begriff („Erkläre den Begriff: Bilanz“ steht unter B). „＋ Neue Karte“ öffnet das Formular als Blatt von unten; Bearbeiten und Löschen (mit „Rückgängig“ im Hinweis) direkt am Eintrag.
 - **Wissen (Nachschlagewerk):**
-  - **Themen:** Merker je Fach mit Miniblöcken und den sechs Bezügen (Praxisbezug, Glossar, Prüfungsbezug, Managementsprache, Abschluss, Abweichungen).
+  - **Fach-Knopf** wie beim Üben; Fächer ohne Merker stehen bei „Alle Fächer“ gesammelt in einer Zeile.
+  - **Themen:** Merker je Fach mit Miniblöcken und den sechs Bezügen (Praxisbezug, Glossar, Prüfungsbezug, Managementsprache, Abschluss, Abweichungen). Jede Merker-Karte zeigt „📈 x % sicher“: Anteil ihrer Lernkarten ab Stufe 3 im eigenen Lernstand. Merker mit nur einem Thema erscheinen ohne Sprungmarke und ohne doppelten Titel.
   - **A–Z:** Register aller Begriffe und eigenen Einträge.
   - **Eigene:** eigene Einträge mit Erklärung, Beispiel und Bildern; Entwürfe sammeln sich unter „Offen“.
   - **Suche** über Begriffe, Kürzel, Themen, Musterantworten und Managementsprache. Gibt es einen Begriff noch nicht, lässt er sich direkt als Entwurf anlegen.

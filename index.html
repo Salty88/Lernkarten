@@ -100,50 +100,38 @@
 
     <!-- ============ Erstellen ============ -->
     <section class="view" id="view-create" role="tabpanel" aria-labelledby="tab-create" hidden>
-      <form class="panel card-form" id="card-form" autocomplete="off">
-        <h2 class="panel-title" id="form-title">Neue Karte</h2>
-
-        <label class="field">
-          <span class="field-label">Fach</span>
-          <input class="input" id="input-fach" name="fach" type="text" list="fach-list" required maxlength="80" placeholder="z. B. VWL, Rechnungswesen" enterkeyhint="next">
-        </label>
-        <datalist id="fach-list"></datalist>
-
-        <label class="field">
-          <span class="field-label">Frage</span>
-          <textarea class="input textarea" id="input-frage" name="frage" rows="3" required placeholder="Was möchtest du abfragen?"></textarea>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Antwort</span>
-          <textarea class="input textarea" id="input-antwort" name="antwort" rows="4" required placeholder="Die richtige Antwort"></textarea>
-        </label>
-
-        <div class="form-actions">
-          <button class="btn btn-primary" id="submit-btn" type="submit">Karte hinzufügen</button>
-          <button class="btn btn-secondary" id="cancel-edit-btn" type="button" hidden>Abbrechen</button>
+      <div class="view-head">
+        <div class="view-head-row">
+          <h2 class="view-title">Karten <span class="counter" id="card-counter"></span></h2>
+          <button class="fach-btn" id="create-fach-btn" type="button" aria-haspopup="dialog">
+            <span class="fach-dot" aria-hidden="true"></span><span class="fach-label" id="create-fach-label">Alle Fächer</span><span class="fach-caret" aria-hidden="true">▼</span>
+          </button>
         </div>
-      </form>
-
-      <div class="list-header">
-        <h2 class="list-title">Deine Karten <span class="counter" id="card-counter"></span></h2>
-        <label class="visually-hidden" for="list-filter">Kartenliste nach Fach filtern</label>
-        <select class="select" id="list-filter"></select>
+        <label class="visually-hidden" for="create-search">Karten suchen</label>
+        <input class="input search-input" id="create-search" type="search" placeholder="🔍 Suchen: Text oder Nummer" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+        <nav class="az-bar" id="create-letters" aria-label="Buchstaben"></nav>
       </div>
 
-      <ul class="card-list" id="card-list"></ul>
+      <div class="card-list" id="card-list"></div>
       <button class="btn btn-secondary list-more" id="list-more" type="button" hidden></button>
       <p class="empty-text list-empty" id="list-empty" hidden></p>
+
+      <button class="btn btn-primary fab" id="new-card-btn" type="button">＋ Neue Karte</button>
     </section>
 
     <!-- ============ Wissen (Nachschlagewerk) ============ -->
     <section class="view" id="view-wissen" role="tabpanel" aria-labelledby="tab-wissen" hidden>
       <div class="wissen-head">
+        <div class="view-head-row">
+          <h2 class="view-title">Wissen</h2>
+          <button class="fach-btn" id="w-fach-btn" type="button" aria-haspopup="dialog">
+            <span class="fach-dot" aria-hidden="true"></span><span class="fach-label" id="w-fach-label">Alle Fächer</span><span class="fach-caret" aria-hidden="true">▼</span>
+          </button>
+        </div>
         <div class="search-box">
           <label class="visually-hidden" for="w-search">Suchen</label>
           <input class="input search-input" id="w-search" type="search" placeholder="🔍 Begriff suchen oder neu erfassen" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
         </div>
-        <div class="chips chips-scroll" id="w-chips" role="toolbar" aria-label="Fach wählen"></div>
         <div class="wissen-bar">
           <div class="segmented" role="tablist" aria-label="Ansicht im Nachschlagewerk">
             <button class="seg is-active" type="button" role="tab" aria-selected="true" data-mode="themen">Themen</button>
@@ -313,6 +301,40 @@
         <div class="form-actions">
           <button class="btn btn-primary" id="settings-save" type="submit">Speichern &amp; verbinden</button>
           <button class="btn btn-ghost-danger" id="settings-clear" type="button">Zugangsdaten von diesem Gerät entfernen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Karte anlegen oder bearbeiten ============ -->
+  <div class="modal-backdrop sheet-backdrop" id="card-sheet" hidden>
+    <div class="modal sheet" role="dialog" aria-modal="true" aria-labelledby="form-title">
+      <span class="sheet-grip" aria-hidden="true"></span>
+      <form class="card-form" id="card-form" autocomplete="off">
+        <div class="modal-header">
+          <h2 id="form-title">Neue Karte</h2>
+          <button class="icon-btn" id="close-card-sheet" type="button" aria-label="Schließen">✕</button>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Fach</span>
+          <input class="input" id="input-fach" name="fach" type="text" list="fach-list" required maxlength="80" placeholder="z. B. VWL, Rechnungswesen" enterkeyhint="next">
+        </label>
+        <datalist id="fach-list"></datalist>
+
+        <label class="field">
+          <span class="field-label">Frage</span>
+          <textarea class="input textarea" id="input-frage" name="frage" rows="3" required placeholder="Was möchtest du abfragen?"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Antwort</span>
+          <textarea class="input textarea" id="input-antwort" name="antwort" rows="4" required placeholder="Die richtige Antwort"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" id="submit-btn" type="submit">Karte hinzufügen</button>
+          <button class="btn btn-secondary" id="cancel-edit-btn" type="button" hidden>Abbrechen</button>
         </div>
       </form>
     </div>

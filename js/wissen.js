@@ -33,8 +33,11 @@ import {
   sameNameTerms,
   search,
   quelleFor,
+  quelleGroup,
   wissenCard,
 } from './wissen-data.js';
+import { getEntry } from './progress.js';
+import { openFachSheet, refreshFachSheet } from './fach-sheet.js';
 
 const PREFS_KEY = 'lernkartei.wissen.prefs';
 const ALL = 'alle';
@@ -158,7 +161,7 @@ export function reloadWissenForSettings({ clear = false } = {}) {
 /* ------------------------------------------------------------------ */
 
 export function renderWissen() {
-  renderChips();
+  renderFachButton();
   document.querySelectorAll('#view-wissen .seg').forEach((seg) => {
     const active = seg.dataset.mode === ws.mode;
     seg.classList.toggle('is-active', active);
@@ -173,26 +176,66 @@ export function renderWissen() {
   else content.append(ws.openMerkerId ? renderMerkerView() : renderMerkerList());
 }
 
-function renderChips() {
+/** Anzahl der Begriffe und eigenen Einträge je Fach. */
+function fachCounts() {
   const counts = new Map();
   const bump = (key, n = 1) => counts.set(key, (counts.get(key) || 0) + n);
   for (const term of store.index ? store.index.terms : []) bump(term.fach);
   for (const entry of store.eigene) bump(fachKey(entry.fach));
+  return counts;
+}
 
-  const extra = [...counts.keys()].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
+function fachOptions() {
+  const counts = fachCounts();
+  const withMerker = new Set(store.merker.map((m) => m.fach));
+  const extra = [...new Set([...counts.keys(), ...withMerker])].filter((k) => k.startsWith('x:')).sort((a, b) => a.localeCompare(b, 'de'));
   const keys = [ALL, ...FAECHER.map((f) => f.id), ...extra];
-  if (!keys.includes(ws.fach)) ws.fach = ALL;
-
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
-  $('w-chips').replaceChildren(
-    ...keys.map((key) => {
-      const chip = button(`chip${key === ws.fach ? ' is-active' : ''}`, key === ALL ? 'Alle' : fachLabel(key));
-      chip.dataset.fach = key;
-      chip.title = key === ALL ? 'Alle Fächer' : fachName(key);
-      chip.append(el('span', 'chip-count', String(key === ALL ? total : counts.get(key) || 0)));
-      return chip;
-    }),
-  );
+  return keys.map((key) => ({
+    key,
+    kurz: key === ALL ? 'Alle Fächer' : fachLabel(key),
+    name: key === ALL ? '' : fachName(key),
+    count: key === ALL ? total : counts.get(key) || 0,
+    empty: key !== ALL && !counts.get(key) && !withMerker.has(key),
+  }));
+}
+
+function renderFachButton() {
+  const keys = fachOptions().map((o) => o.key);
+  if (!keys.includes(ws.fach)) ws.fach = ALL;
+  $('w-fach-label').textContent = ws.fach === ALL ? 'Alle Fächer' : fachLabel(ws.fach);
+  $('w-fach-btn').title = ws.fach === ALL ? 'Alle Fächer' : fachName(ws.fach);
+  refreshFachSheet();
+}
+
+function setFach(key) {
+  ws.fach = key;
+  if (ws.openMerkerId && ws.fach !== ALL) {
+    const open = store.merker.find((m) => m.id === ws.openMerkerId);
+    if (!open || open.fach !== ws.fach) ws.openMerkerId = null;
+  }
+  savePrefs();
+  renderWissen();
+}
+
+/**
+ * Lernstand eines Merkers: Anteil seiner Lernkarten ab Stufe 3 (im eigenen Lernstand).
+ * Ohne verknüpfte Karten gibt es keinen Wert.
+ */
+function merkerSicher(merker) {
+  if (!cards) return null;
+  const linked = cards.cards().filter((card) => quelleGroup(card.quelle) === merker.id);
+  if (!linked.length) return null;
+  const sure = linked.filter((card) => {
+    const entry = getEntry(card.id);
+    return entry && entry.b >= 3;
+  }).length;
+  return { percent: Math.round((sure / linked.length) * 100), total: linked.length };
+}
+
+/** Lernstand oder Karten haben sich geändert: Übersicht neu zeichnen, ohne eine offene Ansicht zu stören. */
+export function refreshWissenStats() {
+  if (ws.mode === 'themen' && !ws.openMerkerId && !ws.query.trim()) renderWissen();
 }
 
 function emptyState(icon, title, text) {
@@ -216,7 +259,7 @@ function renderMerkerList() {
   const wrap = el('div', 'merker-list');
   const settings = getSettings();
   if (!hasValidSettings(settings) && store.merker.length === 0) {
-    wrap.append(emptyState('🔌', 'Noch nicht verbunden', 'Verbinde zuerst dein GitHub-Repository über das Zahnrad oben rechts.'));
+    wrap.append(emptyState('🔌', 'Noch nicht verbunden', 'Verbinde zuerst dein GitHub-Repository unter „Mehr“.'));
     return wrap;
   }
 
@@ -224,8 +267,14 @@ function renderMerkerList() {
     ? [...FAECHER.map((f) => f.id), ...new Set(store.merker.map((m) => m.fach).filter((k) => k.startsWith('x:')))]
     : [ws.fach];
 
+  // Bei „Alle Fächer“ stehen Fächer ohne Merker gesammelt in einer Zeile am Ende
+  const leer = [];
   for (const key of groups) {
     const list = store.merker.filter((m) => m.fach === key);
+    if (ws.fach === ALL && list.length === 0) {
+      leer.push(key);
+      continue;
+    }
     const group = el('section', 'fach-group');
     const head = el('h3', 'fach-group-title');
     head.append(el('span', 'fach-group-kurz', fachLabel(key)), document.createTextNode(fachName(key)));
@@ -237,14 +286,33 @@ function renderMerkerList() {
     for (const merker of list) {
       const stats = merkerStats(merker);
       const card = button('merker-card', null, () => openMerker(merker.id));
-      card.append(
-        el('span', 'merker-card-title', merker.titel),
-        el('span', 'merker-card-teil', merker.teil),
-        el('span', 'merker-card-stats', `${plural(stats.themen, 'Thema', 'Themen')} · ${plural(stats.begriffe, 'Begriff', 'Begriffe')}`),
-      );
+      card.append(el('span', 'merker-card-title', merker.titel));
+      if (merker.teil) card.append(el('span', 'merker-card-teil', merker.teil));
+      const foot = el('span', 'merker-card-foot');
+      foot.append(el('span', 'merker-card-stats', `${plural(stats.themen, 'Thema', 'Themen')} · ${plural(stats.begriffe, 'Begriff', 'Begriffe')}`));
+      card.append(foot);
+      const sicher = merkerSicher(merker);
+      if (sicher) {
+        const pill = el('span', `merker-sicher${sicher.percent >= 80 ? ' is-high' : ''}`, `📈 ${sicher.percent} % sicher`);
+        pill.title = `${plural(sicher.total, 'Lernkarte', 'Lernkarten')}, Anteil ab Stufe 3`;
+        foot.append(pill);
+        const meter = el('span', 'merker-meter');
+        meter.setAttribute('aria-hidden', 'true');
+        const fill = el('span', 'merker-meter-fill');
+        fill.style.width = `${sicher.percent}%`;
+        meter.append(fill);
+        card.append(meter);
+      }
       group.append(card);
     }
     wrap.append(group);
+  }
+  if (leer.length === groups.length) {
+    wrap.append(emptyState('📥', 'Noch keine Merker', 'Merker importierst du unter „Mehr“ › Merker importieren.'));
+  } else if (leer.length) {
+    const rest = el('p', 'fach-group-empty fach-rest');
+    rest.append(el('span', 'fach-rest-label', 'Noch ohne Merker: '), document.createTextNode(leer.map(fachLabel).join(' · ')));
+    wrap.append(rest);
   }
   return wrap;
 }
@@ -282,6 +350,12 @@ function renderMerkerView() {
     renderWissen();
   });
   wrap.append(back, renderMerkerHeader(merker));
+
+  // Nur ein Thema: ohne Sprungmarke und ohne zweiten Titel, Inhalt sofort offen
+  if (merker.bloecke.length === 1) {
+    wrap.append(renderSingleBlock(merker, merker.bloecke[0]), renderMerkerFooter(merker));
+    return wrap;
+  }
 
   const jump = el('nav', 'block-jump');
   jump.setAttribute('aria-label', 'Miniblöcke');
@@ -377,6 +451,12 @@ function renderBlock(merker, block) {
     details.append(el('p', 'block-teaser', plainText(block.abschluss.kernaussage)));
   }
 
+  details.append(blockBody(merker, block));
+  return details;
+}
+
+/** Die sechs Bezüge eines Miniblocks. */
+function blockBody(merker, block) {
   const body = el('div', 'block-body');
   const ctx = () => linkCtx({ merkerId: merker.id, fach: merker.fach });
   const has = blockContent(block);
@@ -392,8 +472,22 @@ function renderBlock(merker, block) {
   ];
   // Leere Bezüge werden nicht angezeigt; die Nummerierung bleibt wie im Merker
   sections.filter(([present]) => present).forEach(([, title, open, build]) => body.append(section(title, open, build)));
-  details.append(body);
-  return details;
+  return body;
+}
+
+/** Ein Merker mit nur einem Thema: Bezüge direkt, ohne aufklappbaren Rahmen. */
+function renderSingleBlock(merker, block) {
+  const box = el('div', 'block block-single');
+  box.id = `block-${merker.id}-${block.id}`;
+  const sameTitle = norm(block.titel) === norm(merker.titel);
+  if ((block.titel && !sameTitle) || block.folien) {
+    const head = el('div', 'block-head block-single-head');
+    if (block.titel && !sameTitle) head.append(el('span', 'block-title', block.titel));
+    if (block.folien) head.append(el('span', 'block-folien', block.folien));
+    box.append(head);
+  }
+  box.append(blockBody(merker, block));
+  return box;
 }
 
 /** Welche der sechs Bezüge haben Inhalt? */
@@ -1133,7 +1227,7 @@ async function saveEntry(event) {
     return;
   }
   if (!hasValidSettings(settings)) {
-    setEditorStatus('Bitte zuerst die GitHub-Verbindung einrichten (Zahnrad oben rechts).', 'error');
+    setEditorStatus('Bitte zuerst die GitHub-Verbindung einrichten (unter „Mehr“).', 'error');
     return;
   }
 
@@ -1338,17 +1432,9 @@ export function initWissen(options) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => setQuery(event.target.value), 120);
   });
-  $('w-chips').addEventListener('click', (event) => {
-    const chip = event.target.closest('[data-fach]');
-    if (!chip) return;
-    ws.fach = chip.dataset.fach;
-    if (ws.openMerkerId && ws.fach !== ALL) {
-      const open = store.merker.find((m) => m.id === ws.openMerkerId);
-      if (!open || open.fach !== ws.fach) ws.openMerkerId = null;
-    }
-    savePrefs();
-    renderWissen();
-  });
+  $('w-fach-btn').addEventListener('click', () =>
+    openFachSheet({ title: 'Fach wählen · Wissen', getOptions: fachOptions, current: ws.fach, onPick: setFach }),
+  );
   document.querySelectorAll('#view-wissen .seg').forEach((seg) => {
     seg.addEventListener('click', () => {
       ws.mode = seg.dataset.mode;

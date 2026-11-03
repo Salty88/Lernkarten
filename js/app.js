@@ -19,11 +19,11 @@ import {
   fetchCards,
   saveCards,
 } from './github-sync.js';
-import { el, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
-import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge } from './wissen.js';
+import { el, button, norm, showToast, initToast, openModal, closeModal, closeTopModal, isAnyModalOpen, closeOnBackdropClick } from './ui.js';
+import { initWissen, syncWissen, reloadWissenForSettings, setCardBridge, refreshWissenStats } from './wissen.js';
 import { FAECHER, fachKey, fachLabel, fachName, wissenCard, allWissenCards } from './wissen-data.js';
 import { initPractice, refreshPractice, handlePracticeKey } from './practice.js';
-import { initFachSheet } from './fach-sheet.js';
+import { initFachSheet, openFachSheet, refreshFachSheet } from './fach-sheet.js';
 import { initTheme, getThemeChoice, setThemeChoice } from './theme.js';
 import {
   initProgress,
@@ -67,6 +67,7 @@ const state = {
   editor: {
     editingId: null,
     filter: ALL_SUBJECTS,
+    query: '',
     limit: LIST_PAGE_SIZE,
   },
 };
@@ -109,7 +110,13 @@ const dom = {
   submitBtn: $('submit-btn'),
   cancelEditBtn: $('cancel-edit-btn'),
   fachList: $('fach-list'),
-  listFilter: $('list-filter'),
+  cardSheet: $('card-sheet'),
+  closeCardSheet: $('close-card-sheet'),
+  newCardBtn: $('new-card-btn'),
+  createFachBtn: $('create-fach-btn'),
+  createFachLabel: $('create-fach-label'),
+  createSearch: $('create-search'),
+  createLetters: $('create-letters'),
   cardCounter: $('card-counter'),
   cardList: $('card-list'),
   listEmpty: $('list-empty'),
@@ -503,26 +510,15 @@ function restoreTab() {
 /* Fächer: Datalist und Filter                                         */
 /* ------------------------------------------------------------------ */
 
-/** Befüllt ein Filter-Dropdown und behält die Auswahl, solange das Fach existiert. */
-function fillSubjectSelect(select, subjects, current) {
-  const value = subjects.includes(current) ? current : ALL_SUBJECTS;
-  select.replaceChildren();
-  const all = el('option', null, 'Alle Fächer');
-  all.value = ALL_SUBJECTS;
-  select.append(all);
-  for (const subject of subjects) {
-    const option = el('option', null, fachLabel(subject));
-    option.title = fachName(subject);
-    option.value = subject;
-    select.append(option);
-  }
-  select.value = value;
-  return value;
-}
+const CREATE_PREFS_KEY = 'lernkartei.erstellen.fach';
 
 function renderSubjects() {
   const subjects = getSubjects();
-  state.editor.filter = fillSubjectSelect(dom.listFilter, subjects, state.editor.filter);
+  if (state.editor.filter !== ALL_SUBJECTS && !subjects.includes(state.editor.filter)) state.editor.filter = ALL_SUBJECTS;
+  const all = state.editor.filter === ALL_SUBJECTS;
+  dom.createFachLabel.textContent = all ? 'Alle Fächer' : fachLabel(state.editor.filter);
+  dom.createFachBtn.title = all ? 'Alle Fächer' : fachName(state.editor.filter);
+  refreshFachSheet();
 
   const suggestions = new Set([...FAECHER.map((f) => f.kurz), ...state.cards.map((card) => card.fach)]);
   dom.fachList.replaceChildren(
@@ -532,6 +528,42 @@ function renderSubjects() {
       return option;
     }),
   );
+}
+
+/** Fach-Liste für „Erstellen“: alle Fächer mit Anzahl der Karten. */
+function createFachOptions() {
+  const counts = new Map();
+  for (const card of state.cards) counts.set(fachKey(card.fach), (counts.get(fachKey(card.fach)) || 0) + 1);
+  const extra = [...counts.keys()].filter((k) => !FACH_ORDER.has(k)).sort((a, b) => a.localeCompare(b, 'de'));
+  const keys = [ALL_SUBJECTS, ...FAECHER.map((f) => f.id), ...extra];
+  return keys.map((key) => ({
+    key,
+    kurz: key === ALL_SUBJECTS ? 'Alle Fächer' : fachLabel(key),
+    name: key === ALL_SUBJECTS ? '' : fachName(key),
+    count: key === ALL_SUBJECTS ? state.cards.length : counts.get(key) || 0,
+    empty: key !== ALL_SUBJECTS && !counts.has(key),
+  }));
+}
+
+function setCreateFach(key) {
+  state.editor.filter = key;
+  state.editor.limit = LIST_PAGE_SIZE;
+  try {
+    localStorage.setItem(CREATE_PREFS_KEY, key);
+  } catch {
+    /* nur Komfort */
+  }
+  renderSubjects();
+  renderCardList();
+}
+
+function restoreCreateFach() {
+  try {
+    const key = localStorage.getItem(CREATE_PREFS_KEY);
+    if (key) state.editor.filter = key;
+  } catch {
+    /* Standard: alle Fächer */
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -636,8 +668,20 @@ function enterEditMode(id) {
   dom.cancelEditBtn.hidden = false;
   dom.form.classList.add('is-editing');
   renderCardList();
-  dom.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  dom.inputFrage.focus({ preventScroll: true });
+  openModal(dom.cardSheet, dom.inputFrage);
+}
+
+/** Öffnet das Blatt für eine neue Karte; ein angefangener Entwurf bleibt erhalten. */
+function openNewCard() {
+  if (state.editor.editingId) exitEditMode();
+  if (!dom.inputFach.value.trim() && state.editor.filter !== ALL_SUBJECTS) {
+    dom.inputFach.value = fachLabel(state.editor.filter);
+  }
+  openModal(dom.cardSheet, dom.inputFach.value.trim() ? dom.inputFrage : dom.inputFach);
+}
+
+function closeCardSheet() {
+  closeModal(dom.cardSheet);
 }
 
 function exitEditMode() {
@@ -647,6 +691,7 @@ function exitEditMode() {
   dom.submitBtn.textContent = 'Karte hinzufügen';
   dom.cancelEditBtn.hidden = true;
   dom.form.classList.remove('is-editing');
+  if (!dom.cardSheet.hidden) closeModal(dom.cardSheet);
   renderCardList();
 }
 
@@ -697,37 +742,146 @@ function buildCardListItem(card) {
     body.append(link);
   }
 
+  // Bearbeiten und Löschen sitzen rechts in der Kopfzeile, damit die Liste kompakt bleibt
   const actions = el('div', 'list-actions');
-  const edit = el('button', 'btn btn-small btn-secondary', '✎ Bearbeiten');
+  const edit = el('button', 'icon-btn list-icon-btn', '✎');
   edit.type = 'button';
   edit.dataset.action = 'edit';
-  const remove = el('button', 'btn btn-small btn-ghost-danger', '🗑 Löschen');
+  edit.title = 'Bearbeiten';
+  edit.setAttribute('aria-label', `Karte ${formatNr(card.nr)} bearbeiten`);
+  const remove = el('button', 'icon-btn list-icon-btn is-danger', '🗑');
   remove.type = 'button';
   remove.dataset.action = 'delete';
+  remove.title = 'Löschen';
+  remove.setAttribute('aria-label', `Karte ${formatNr(card.nr)} löschen`);
   actions.append(edit, remove);
+  meta.append(actions);
 
-  item.append(meta, body, actions);
+  item.append(meta, body);
   return item;
+}
+
+/**
+ * Vorsätze wie „Erkläre den Begriff:“ oder „Was ist ein“ zählen für das
+ * Register nicht: „Erkläre den Begriff: Bilanz“ steht unter B.
+ */
+const SORT_PREFIXES = [
+  /^was\s+ist\s+die\s+kernaussage\s+zu\s+/i,
+  /^(erkläre|erklären sie|erläutere|erläutern sie|beschreibe|beschreiben sie|definiere|definieren sie|nenne|nennen sie)\b\s*(kurz\s+)?((den|die|das)\s+)?(begriffe?|abkürzung|unterschied zwischen)?\s*:?\s*/i,
+  /^was\s+(ist|sind|bedeutet|bedeuten|versteht man unter|beschreibt|regelt|misst|zeigt|macht)\b\s*/i,
+  /^wof(ü|u)r\s+steht\s+(die\s+abkürzung\s+)?/i,
+  /^(formuliere\s+in\s+managementsprache|ordne\s+zu|feynman)\s*:\s*/i,
+  /^(der|die|das|ein|eine|einen|einem|einer)\s+/i,
+];
+
+function sortTerm(text) {
+  let t = String(text || '').trim().replace(/^[„"'»«(\[]+/, '');
+  for (let i = 0; i < 3; i++) {
+    const before = t;
+    for (const re of SORT_PREFIXES) t = t.replace(re, '');
+    t = t.replace(/^[„"'»«(\[:\s]+/, '');
+    if (t === before) break;
+  }
+  return t || String(text || '');
+}
+
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
+
+function letterOf(term) {
+  const c = norm(term).charAt(0).toUpperCase();
+  return /[A-Z]/.test(c) ? c : '#';
+}
+
+/** Treffer der Suche: Nummer (z. B. „42“ oder „#0042“) oder Text in Frage, Antwort und Fach. */
+function matchesQuery(card, view, query) {
+  const q = query.trim();
+  if (!q) return true;
+  const nr = q.match(/^#?0*(\d+)$/);
+  if (nr) return String(card.nr || '') === nr[1] || String(card.nr || '').startsWith(nr[1]);
+  const needle = norm(q);
+  return norm(`${view.frage} ${view.antwort} ${card.fach}`).includes(needle);
+}
+
+/** Sichtbare Karten, alphabetisch nach dem eigentlichen Begriff. */
+function visibleCards() {
+  const query = state.editor.query;
+  return cardsForSubject(state.editor.filter)
+    .map((card) => {
+      const view = cardView(card);
+      const term = sortTerm(view.frage);
+      return { card, view, term, letter: letterOf(term) };
+    })
+    .filter(({ card, view }) => matchesQuery(card, view, query))
+    .sort((a, b) => {
+      const la = LETTERS.indexOf(a.letter);
+      const lb = LETTERS.indexOf(b.letter);
+      return la - lb || a.term.localeCompare(b.term, 'de', { sensitivity: 'base' }) || (a.card.nr || 0) - (b.card.nr || 0);
+    });
+}
+
+function jumpToLetter(letter, rows) {
+  const index = rows.findIndex((row) => row.letter === letter);
+  if (index === -1) return;
+  if (index >= state.editor.limit) {
+    state.editor.limit = index + LIST_PAGE_SIZE;
+    renderCardList();
+  }
+  const heading = document.getElementById(`cl-${letter === '#' ? 'num' : letter}`);
+  if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderLetters(rows) {
+  const present = new Set(rows.map((row) => row.letter));
+  dom.createLetters.replaceChildren(
+    ...LETTERS.map((letter) => {
+      const has = present.has(letter);
+      const item = button(`letter${has ? '' : ' is-empty'}`, letter, () => jumpToLetter(letter, visibleCards()));
+      item.disabled = !has;
+      item.setAttribute('aria-label', letter === '#' ? 'Ziffern und Zeichen' : `Buchstabe ${letter}`);
+      return item;
+    }),
+  );
+  dom.createLetters.hidden = rows.length === 0;
 }
 
 function renderCardList() {
   const total = state.cards.length;
-  const visible = cardsForSubject(state.editor.filter).slice().sort((a, b) => (b.nr || 0) - (a.nr || 0)); // neueste zuerst
+  const rows = visibleCards();
+  const filtered = state.editor.filter !== ALL_SUBJECTS || state.editor.query.trim();
 
-  dom.cardCounter.textContent =
-    state.editor.filter === ALL_SUBJECTS ? `(${total})` : `(${visible.length} von ${total})`;
+  dom.cardCounter.textContent = filtered ? `${rows.length} von ${total}` : String(total);
+  renderLetters(rows);
+
   // Große Bestände seitenweise zeigen, damit die Liste flüssig bleibt
-  const editing = state.editor.editingId ? visible.filter((c) => c.id === state.editor.editingId) : [];
-  const page = visible.slice(0, state.editor.limit);
-  if (editing.length && !page.includes(editing[0])) page.unshift(editing[0]);
-  dom.cardList.replaceChildren(...page.map(buildCardListItem));
-  dom.listMore.hidden = visible.length <= state.editor.limit;
-  dom.listMore.textContent = `Weitere anzeigen (${visible.length - Math.min(visible.length, state.editor.limit)} übrig)`;
+  const page = rows.slice(0, state.editor.limit);
+  const groups = [];
+  let current = null;
+  for (const row of page) {
+    if (!current || current.letter !== row.letter) {
+      current = { letter: row.letter, rows: [] };
+      groups.push(current);
+    }
+    current.rows.push(row);
+  }
+  dom.cardList.replaceChildren(
+    ...groups.map((group) => {
+      const section = el('section', 'card-group');
+      const heading = el('h3', 'register-letter', group.letter);
+      heading.id = `cl-${group.letter === '#' ? 'num' : group.letter}`;
+      const list = el('ul', 'card-list-items');
+      list.append(...group.rows.map((row) => buildCardListItem(row.card)));
+      section.append(heading, list);
+      return section;
+    }),
+  );
+  dom.listMore.hidden = rows.length <= state.editor.limit;
+  dom.listMore.textContent = `Weitere anzeigen (${rows.length - Math.min(rows.length, state.editor.limit)} übrig)`;
 
-  dom.listEmpty.hidden = visible.length > 0;
-  if (visible.length === 0) {
-    dom.listEmpty.textContent =
-      total === 0 ? 'Noch keine Karten vorhanden. Lege oben deine erste Karte an.' : 'Keine Karten in diesem Fach.';
+  dom.listEmpty.hidden = rows.length > 0;
+  if (rows.length === 0) {
+    if (total === 0) dom.listEmpty.textContent = 'Noch keine Karten vorhanden. Lege mit „＋ Neue Karte“ deine erste an.';
+    else if (state.editor.query.trim()) dom.listEmpty.textContent = `Keine Karte passt zu „${state.editor.query.trim()}“.`;
+    else dom.listEmpty.textContent = 'Keine Karten in diesem Fach.';
   }
 }
 
@@ -746,6 +900,7 @@ function refreshAfterDataChange() {
   refreshPractice();
   renderLuecken();
   renderLearner();
+  refreshWissenStats();
 }
 
 function renderThemeButtons() {
@@ -954,10 +1109,24 @@ function bindEvents() {
   dom.form.addEventListener('submit', handleFormSubmit);
   dom.form.addEventListener('keydown', handleFormKeydown);
   dom.cancelEditBtn.addEventListener('click', exitEditMode);
-  dom.listFilter.addEventListener('change', () => {
-    state.editor.filter = dom.listFilter.value;
-    state.editor.limit = LIST_PAGE_SIZE;
-    renderCardList();
+  dom.newCardBtn.addEventListener('click', openNewCard);
+  dom.closeCardSheet.addEventListener('click', closeCardSheet);
+  closeOnBackdropClick(dom.cardSheet, closeCardSheet);
+  // Schließen über Escape oder Hintergrund beendet auch das Bearbeiten
+  new MutationObserver(() => {
+    if (dom.cardSheet.hidden && state.editor.editingId) exitEditMode();
+  }).observe(dom.cardSheet, { attributes: true, attributeFilter: ['hidden'] });
+  dom.createFachBtn.addEventListener('click', () =>
+    openFachSheet({ title: 'Fach wählen · Karten', getOptions: createFachOptions, current: state.editor.filter, onPick: setCreateFach }),
+  );
+  let searchTimer = null;
+  dom.createSearch.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.editor.query = dom.createSearch.value;
+      state.editor.limit = LIST_PAGE_SIZE;
+      renderCardList();
+    }, 120);
   });
   dom.listMore.addEventListener('click', () => {
     state.editor.limit += LIST_PAGE_SIZE;
@@ -1011,6 +1180,7 @@ function init() {
   initLuecken({ getSettings: () => state.settings, cards: cardBridge });
   initProgress({ getSettings: () => state.settings, onChange: () => refreshAfterDataChange() });
   restoreTab();
+  restoreCreateFach();
   restoreFromCache();
   state.lastRemoteIds = state.cards.filter((card) => !state.pending.has(card.id)).map((card) => card.id);
   renderSubjects();
